@@ -1,0 +1,56 @@
+name: Build and Update Latest Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build executable
+        run: pyinstaller --onefile --windowed cns2zss_gui.py
+
+      - name: Prepare release package
+        run: |
+          mkdir release_package
+          copy dist\cns2zss_gui.exe release_package\
+          copy cns2zss.py release_package\
+          copy cns2zss_gui.py release_package\
+          powershell Compress-Archive -Path release_package\* -DestinationPath cns2zss_latest.zip
+
+      - name: Update latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest (nightly build)
+          prerelease: false
+          overwrite_files: true
+          files: cns2zss_latest.zip
+          body: |
+            Latest build from commit ${{ github.sha }}.
+
+            ### Release package
+            - `cns2zss_gui.exe`: Windows executable (no Python required)
+            - `cns2zss.py`: core converter (cross‑platform, Python source)
+            - `cns2zss_gui.py`: GUI front‑end (cross‑platform, Python source)
+
+            The Python scripts run on Windows, macOS, and Linux.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
