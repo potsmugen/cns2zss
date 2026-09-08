@@ -3,15 +3,14 @@
 """
 CNS to ZSS Converter
 
-Converts Mugen CNS character state files to Ikemen GO ZSS (Zantei State Script) format.
-Preserves all comments, handles variable assignments, merges identical controllers,
-and applies syntax formatting rules.
+Converts Mugen CNS character state files to Ikemen GO ZSS format.
 """
 
+import os
 import re
 import sys
-import os
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
+
 
 # ----------------------------------------------------------------------
 # Configuration
@@ -22,692 +21,945 @@ MAX_PARAMS_ON_LINE = 3
 # If one‑line controller body exceeds this length, split into multiple lines
 MAX_ONE_LINE_LEN = 100
 
+STATEDEF_RE = re.compile(
+    r'^\s*\[\s*Statedef\s+-?\d+\s*\]',
+    re.IGNORECASE,
+)
+
+
 # ----------------------------------------------------------------------
 # Utility functions
 # ----------------------------------------------------------------------
+
 def map_enum_value(param_name: str, value: str) -> str:
     """Convert deprecated CNS enum values to ZSS style."""
     if not value:
         return value
-    param_lower = param_name.lower()
-    val = value.strip()
-    if not val:
-        return val
 
-    if 'animtype' in param_lower:
-        first = val[0].lower()
-        mapping = {'l': 'Light', 'm': 'Medium', 'h': 'Hard', 'b': 'Back', 'u': 'Up', 'd': 'Diagup'}
-        if first in mapping:
-            return mapping[first]
-        full_words = {'light', 'medium', 'hard', 'back', 'up', 'diagup'}
-        if val.lower() in full_words:
-            return val.capitalize()
-        return value
+    name = param_name.lower()
+    stripped = value.strip()
 
-    if param_lower in ('ground.type', 'air.type'):
-        first = val[0].lower()
-        mapping = {'h': 'High', 'l': 'Low', 't': 'Trip', 'n': 'None'}
-        if first in mapping:
-            return mapping[first]
-        full_words = {'high', 'low', 'trip', 'none'}
-        if val.lower() in full_words:
-            return val.capitalize()
-        return value
+    if not stripped:
+        return stripped
+
+    if 'animtype' in name:
+        mapping = {
+            'l': 'Light',
+            'm': 'Medium',
+            'h': 'Hard',
+            'b': 'Back',
+            'u': 'Up',
+            'd': 'Diagup',
+        }
+
+        if stripped[0].lower() in mapping:
+            return mapping[stripped[0].lower()]
+
+        if stripped.lower() in {
+            'light', 'medium', 'hard', 'back', 'up', 'diagup'
+        }:
+            return stripped.capitalize()
+
+    if name in ('ground.type', 'air.type'):
+        mapping = {
+            'h': 'High',
+            'l': 'Low',
+            't': 'Trip',
+            'n': 'None',
+        }
+
+        if stripped[0].lower() in mapping:
+            return mapping[stripped[0].lower()]
+
+        if stripped.lower() in {'high', 'low', 'trip', 'none'}:
+            return stripped.capitalize()
 
     return value
 
-def split_code_and_comment(line: str):
-    """Split line into code and comment (comment starts with ';')."""
+
+def split_code_and_comment(line: str) -> tuple[str, str | None]:
+    """Split a line into code and comment."""
     if ';' not in line:
         return line.rstrip(), None
-    parts = line.split(';', 1)
-    return parts[0].rstrip(), parts[1].rstrip() if len(parts) > 1 else None
+
+    code, comment = line.split(';', 1)
+    return code.rstrip(), comment.rstrip()
+
 
 def strip_comment_for_parsing(line: str) -> str:
-    """Remove comment portion, keep code."""
-    code, _ = split_code_and_comment(line)
-    return code.strip()
+    """Return stripped code without its comment."""
+    return split_code_and_comment(line)[0].strip()
 
-def get_comment_for_line(line: str) -> str:
-    """Extract comment, convert ';' to '#' for ZSS."""
-    _, comment = split_code_and_comment(line)
-    if comment is not None:
+
+def get_comment_for_line(line: str) -> str | None:
+    """Return a CNS comment converted to a ZSS comment."""
+    comment = split_code_and_comment(line)[1]
+
+    if comment is not None and comment.strip():
         return '#' + comment
+
     return None
 
-def clean_condition(cond: str) -> str:
-    """Remove unnecessary outer parentheses from a condition."""
-    cond = cond.strip()
-    if cond.startswith('(') and cond.endswith(')'):
+
+def clean_condition(condition: str) -> str:
+    """Remove redundant outer parentheses from a condition."""
+    condition = condition.strip()
+
+    if condition.startswith('(') and condition.endswith(')'):
         depth = 0
-        for i, ch in enumerate(cond):
-            if ch == '(':
+
+        for index, char in enumerate(condition):
+            if char == '(':
                 depth += 1
-            elif ch == ')':
+            elif char == ')':
                 depth -= 1
-                if depth == 0 and i == len(cond) - 1:
-                    cond = cond[1:-1].strip()
+
+                if depth == 0 and index == len(condition) - 1:
+                    condition = condition[1:-1].strip()
                     break
-    cond = re.sub(r'(\w+)\s+\(', r'\1(', cond)
-    return cond
 
-def is_always_true(cond: str) -> bool:
-    """Check if condition is the literal trigger1 = 1."""
-    cond = cond.strip()
-    if cond.lower().startswith('trigger1 = '):
-        cond = cond[11:].strip()
-    if cond.startswith('(') and cond.endswith(')'):
-        cond = cond[1:-1].strip()
-    return cond == '1'
+    return re.sub(r'(\w+)\s+\(', r'\1(', condition)
 
-def parse_varset_assignment(line_clean: str):
-    """Recognise variable assignment lines for var/fvar/sysvar/sysfvar."""
-    m = re.match(r'(var|fvar|sysvar|sysfvar)\s*\(\s*(.*?)\s*\)\s*=\s*(.*)', line_clean, re.IGNORECASE)
-    if m:
-        var_type = m.group(1).lower()
-        index_expr = m.group(2).strip()
-        value_expr = m.group(3).strip()
-        return var_type, index_expr, value_expr
-    return None
+
+def is_always_true(condition: str) -> bool:
+    """Return whether the condition is the literal trigger1 = 1."""
+    condition = condition.strip()
+
+    if condition.lower().startswith('trigger1 = '):
+        condition = condition[11:].strip()
+
+    if condition.startswith('(') and condition.endswith(')'):
+        condition = condition[1:-1].strip()
+
+    return condition == '1'
+
+
+def parse_varset_assignment(line: str) -> tuple[str, str, str] | None:
+    """Parse var(), fvar(), sysvar(), or sysfvar() assignment syntax."""
+    match = re.match(
+        r'(var|fvar|sysvar|sysfvar)'
+        r'\s*\(\s*(.*?)\s*\)\s*=\s*(.*)',
+        line,
+        re.IGNORECASE,
+    )
+
+    if not match:
+        return None
+
+    return (
+        match.group(1).lower(),
+        match.group(2).strip(),
+        match.group(3).strip(),
+    )
+
+
+def is_controller_header(line: str) -> bool:
+    """Return whether a line is a [State ...] controller header."""
+    return bool(re.match(
+        r'^\s*\[\s*State(?:\s|,|\])',
+        line,
+        re.IGNORECASE,
+    ))
+
+
+def is_comment_or_blank(line: str) -> bool:
+    """Return whether a line is blank or a standalone comment."""
+    return (
+        not line.strip()
+        or line.lstrip().startswith(';')
+    )
+
 
 # ----------------------------------------------------------------------
-# State and controller parsing
+# Parsing
 # ----------------------------------------------------------------------
+
 def parse_state_block(lines):
-    """
-    Parse a complete state block (from [Statedef ...] to next [Statedef]).
-    Returns a dictionary with keys:
-        'no', 'attributes', 'attr_comments', 'controllers', 'pure_comments'.
-    """
+    """Parse one complete Statedef block."""
     state = {
         'no': None,
-        'attributes': OrderedDict(),
-        'attr_comments': OrderedDict(),
+        'attributes': {},
+        'attr_comments': {},
         'controllers': [],
-        'pure_comments': []
+        'pure_comments': [],
     }
+
     current_controller = None
-    i = 0
-    total = len(lines)
+    index = 0
 
-    while i < total:
-        raw_line = lines[i]
+    while index < len(lines):
+        raw_line = lines[index]
+        code, comment = split_code_and_comment(raw_line)
 
-        # Pure comment line (no code before ';')
-        code_part, comment_part = split_code_and_comment(raw_line)
-        if code_part is None or code_part.strip() == '':
-            if comment_part and comment_part.strip():
-                state['pure_comments'].append('#' + comment_part.strip())
-            i += 1
+        if not code.strip():
+            if comment and comment.strip():
+                state['pure_comments'].append('#' + comment.strip())
+
+            index += 1
             continue
 
-        stripped = strip_comment_for_parsing(raw_line)
-        if not stripped:
-            i += 1
+        stripped = code.strip()
+
+        statedef_match = STATEDEF_RE.match(stripped)
+        if statedef_match:
+            number = re.search(r'Statedef\s+(-?\d+)', stripped, re.I)
+            state['no'] = int(number.group(1))
+            index += 1
             continue
 
-        # [Statedef ...] header
-        m = re.match(r'\[\s*Statedef\s+(-?\d+)\s*\]', stripped, re.IGNORECASE)
-        if m:
-            state['no'] = int(m.group(1))
-            i += 1
-            continue
+        controller_match = re.match(
+            r'\[\s*State\s+(.*?)\]',
+            stripped,
+            re.IGNORECASE,
+        )
 
-        # [State ...] header (start of a controller)
-        m = re.match(r'\[\s*State\s+(.*?)\]', stripped, re.IGNORECASE)
-        if m:
+        if controller_match:
             if current_controller and current_controller.get('type'):
                 state['controllers'].append(current_controller)
 
-            header_content = m.group(1).strip()
-            if ',' in header_content:
-                label, comment = header_content.split(',', 1)
-                comment = comment.strip()
+            header = controller_match.group(1).strip()
+
+            if ',' in header:
+                label, controller_comment = header.split(',', 1)
+                controller_comment = controller_comment.strip()
             else:
-                label = header_content
-                comment = label if label else None
+                label = header
+                controller_comment = label or None
 
             raw_block = [raw_line]
-            ctrl_lines = []
-            i += 1
-            while i < total:
-                nxt = lines[i]
-                nxt_code, _ = split_code_and_comment(nxt)
-                if nxt_code and nxt_code.strip().startswith('['):
+            controller_lines = []
+            index += 1
+
+            while index < len(lines):
+                next_line = lines[index]
+                next_code, _ = split_code_and_comment(next_line)
+
+                if next_code and next_code.strip().startswith('['):
                     break
-                ctrl_lines.append(nxt)
-                raw_block.append(nxt)
-                i += 1
+
+                controller_lines.append(next_line)
+                raw_block.append(next_line)
+                index += 1
 
             current_controller = {
                 'type': None,
                 'triggeralls': [],
                 'triggers': defaultdict(list),
-                'params': OrderedDict(),
-                'param_comments': OrderedDict(),
+                'params': {},
+                'param_comments': {},
+                'special_comments': {},
                 'duplicates': [],
                 'persistent': None,
                 'ignorehitpause': None,
-                'comment': comment,
-                'raw_block': raw_block
+                'comment': controller_comment,
+                'pure_comments': [],
+                'raw_block': raw_block,
             }
+
             seen_params = set()
 
-            for cline in ctrl_lines:
-                code_clean = strip_comment_for_parsing(cline)
-                if not code_clean:
+            for controller_line in controller_lines:
+                clean_line = strip_comment_for_parsing(controller_line)
+                line_comment = get_comment_for_line(controller_line)
+
+                if not clean_line:
+                    if line_comment:
+                        current_controller['pure_comments'].append(line_comment.strip())
                     continue
 
-                # Trigger lines
-                trig_match = re.match(r'(trigger\d*|triggerall)\s*=\s*(.*)', code_clean, re.IGNORECASE)
-                if trig_match:
-                    key = trig_match.group(1).lower()
-                    cond = trig_match.group(2).strip()
+                trigger_match = re.match(
+                    r'(trigger\d*|triggerall)\s*=\s*(.*)',
+                    clean_line,
+                    re.IGNORECASE,
+                )
+
+                if trigger_match:
+                    key = trigger_match.group(1).lower()
+                    condition = trigger_match.group(2).strip()
+
                     if key == 'triggerall':
-                        current_controller['triggeralls'].append(cond)
+                        current_controller['triggeralls'].append(condition)
                     else:
-                        num = int(key[7:]) if len(key) > 7 else 1
-                        current_controller['triggers'][num].append(cond)
+                        number = int(key[7:]) if len(key) > 7 else 1
+                        current_controller['triggers'][number].append(condition)
+
                     continue
 
-                # Variable assignment (varadd / varset / parentvaradd / parentvarset)
-                varset = parse_varset_assignment(code_clean)
+                varset = parse_varset_assignment(clean_line)
+
                 if varset:
                     var_type, index_expr, value_expr = varset
                     param_name = {
                         'var': 'v',
                         'fvar': 'fv',
                         'sysvar': 'sysv',
-                        'sysfvar': 'sysfv'
-                    }.get(var_type, 'v')
+                        'sysfvar': 'sysfv',
+                    }[var_type]
+
                     if param_name in seen_params:
-                        current_controller['duplicates'].append((param_name, index_expr))
-                        current_controller['duplicates'].append(('value', value_expr))
+                        current_controller['duplicates'].extend([
+                            (param_name, index_expr),
+                            ('value', value_expr),
+                        ])
                     else:
-                        seen_params.add(param_name)
-                        seen_params.add('value')
+                        seen_params.update((param_name, 'value'))
                         current_controller['params'][param_name] = index_expr
                         current_controller['params']['value'] = value_expr
-                    comment = get_comment_for_line(cline)
-                    if comment:
-                        current_controller['param_comments'][param_name] = comment
+
+                    if line_comment:
+                        current_controller['param_comments'][param_name] = (
+                            line_comment
+                        )
+
                     continue
 
-                # Regular parameter (key = value)
-                param_match = re.match(r'([\w\.]+)\s*=\s*(.*)', code_clean)
-                if param_match:
-                    pname = param_match.group(1).lower()
-                    pval = param_match.group(2).strip()
-                    comment = get_comment_for_line(cline)
+                parameter_match = re.match(
+                    r'([\w\.]+)\s*=\s*(.*)',
+                    clean_line,
+                )
 
-                    if pname in ('persistent', 'ignorehitpause', 'type'):
-                        if pname == 'persistent':
-                            current_controller['persistent'] = pval
-                        elif pname == 'ignorehitpause':
-                            current_controller['ignorehitpause'] = pval
-                        elif pname == 'type':
-                            type_lower = pval.lower()
-                            if type_lower in ('varadd', 'parentvaradd'):
-                                current_controller['type'] = 'varAdd'
-                            elif type_lower in ('varset', 'parentvarset'):
-                                current_controller['type'] = 'varSet'
-                            else:
-                                current_controller['type'] = pval
-                        if comment:
-                            current_controller['param_comments'][pname] = comment
+                if not parameter_match:
+                    continue
+
+                parameter = parameter_match.group(1).lower()
+                value = parameter_match.group(2).strip()
+
+                if parameter in ('persistent', 'ignorehitpause', 'type'):
+                    if parameter == 'persistent':
+                        current_controller['persistent'] = value
+                    elif parameter == 'ignorehitpause':
+                        current_controller['ignorehitpause'] = value
                     else:
-                        if pname in seen_params:
-                            current_controller['duplicates'].append((pname, pval))
+                        value_lower = value.lower()
+
+                        if value_lower in ('varadd', 'parentvaradd'):
+                            current_controller['type'] = 'varAdd'
+                        elif value_lower in ('varset', 'parentvarset'):
+                            current_controller['type'] = 'varSet'
                         else:
-                            seen_params.add(pname)
-                            current_controller['params'][pname] = map_enum_value(pname, pval)
-                            if comment:
-                                current_controller['param_comments'][pname] = comment
-                    continue
+                            current_controller['type'] = value
+
+                    if line_comment:
+                        current_controller['special_comments'][parameter] = (
+                            line_comment
+                        )
+
+                elif parameter in seen_params:
+                    current_controller['duplicates'].append(
+                        (parameter, value)
+                    )
+                else:
+                    seen_params.add(parameter)
+                    current_controller['params'][parameter] = map_enum_value(
+                        parameter,
+                        value,
+                    )
+
+                    if line_comment:
+                        current_controller['param_comments'][parameter] = (
+                            line_comment
+                        )
+
             continue
 
-        # Attribute lines (before any [State ...])
         if current_controller is None:
-            attr_match = re.match(r'(\w+)\s*=\s*(.*)', stripped)
-            if attr_match:
-                attr = attr_match.group(1).lower()
-                val = attr_match.group(2).strip()
-                state['attributes'][attr] = val
-                comment = get_comment_for_line(raw_line)
-                if comment:
-                    state['attr_comments'][attr] = comment
-        i += 1
+            attribute_match = re.match(r'(\w+)\s*=\s*(.*)', stripped)
+
+            if attribute_match:
+                attribute = attribute_match.group(1).lower()
+                state['attributes'][attribute] = attribute_match.group(2).strip()
+
+                line_comment = get_comment_for_line(raw_line)
+                if line_comment:
+                    state['attr_comments'][attribute] = line_comment
+
+        index += 1
 
     if current_controller and current_controller.get('type'):
         state['controllers'].append(current_controller)
 
     return state
 
+
 # ----------------------------------------------------------------------
 # Controller formatting
 # ----------------------------------------------------------------------
-def format_controller_body(ctrl_type: str, params: OrderedDict, param_comments: OrderedDict, duplicates, ignorehitpause_val=None) -> str:
-    """Format a controller's parameter list into a ZSS body string."""
+
+def format_controller_body(
+    controller_type,
+    params,
+    param_comments,
+    duplicates,
+    ignorehitpause_val=None,
+):
+    """Format one controller body."""
     all_params = list(params.items())
 
-    if ignorehitpause_val is not None and ignorehitpause_val != '0':
-        if ctrl_type.lower() in ('explod', 'modifyexplod', 'afterimage'):
-            all_params.insert(0, ("ignorehitpause", "1"))
+    if (
+        ignorehitpause_val is not None
+        and ignorehitpause_val != '0'
+        and controller_type.lower() in (
+            'explod',
+            'modifyexplod',
+            'afterimage',
+        )
+    ):
+        all_params.insert(0, ('ignorehitpause', '1'))
 
     if not all_params and not duplicates:
-        return f"{ctrl_type}{{}}"
+        return f'{controller_type}{{}}'
 
-    # Try one-line version
-    one_line_items = []
-    for i, (k, v) in enumerate(all_params):
-        if i == len(all_params) - 1:
-            one_line_items.append(f"{k}: {v}")
-        else:
-            one_line_items.append(f"{k}: {v};")
-    one_line_body = f"{ctrl_type}{{{' '.join(one_line_items)}}}"
+    items = []
 
-    has_comment = any(k in param_comments for k, _ in all_params) or bool(duplicates)
-    if has_comment or len(all_params) > MAX_PARAMS_ON_LINE or len(one_line_body) > MAX_ONE_LINE_LEN:
-        lines = [f"{ctrl_type}{{"]
-        for k, v in all_params:
-            comment = param_comments.get(k)
+    for index, (key, value) in enumerate(all_params):
+        suffix = '' if index == len(all_params) - 1 else ';'
+        items.append(f'{key}: {value}{suffix}')
+
+    one_line = f'{controller_type}{{{" ".join(items)}}}'
+    has_comment = any(key in param_comments for key, _ in all_params)
+
+    if (
+        has_comment
+        or duplicates
+        or len(all_params) > MAX_PARAMS_ON_LINE
+        or len(one_line) > MAX_ONE_LINE_LEN
+    ):
+        lines = [f'{controller_type}{{']
+
+        for key, value in all_params:
+            comment = param_comments.get(key)
+
             if comment:
-                lines.append(f"\t{k}: {v}; {comment}")
+                lines.append(f'\t{key}: {value}; {comment}')
             else:
-                lines.append(f"\t{k}: {v};")
-        for dup_key, dup_val in duplicates:
-            lines.append(f"\t# WARNING: duplicate parameter: {dup_key}: {dup_val}")
-        lines.append("}")
-        return "\n".join(lines)
-    else:
-        return one_line_body
+                lines.append(f'\t{key}: {value};')
 
-def get_trigger_key(ctrl):
-    """Generate a hashable key for a controller's triggers, persistent, ignorehitpause."""
-    talls = tuple(sorted(clean_condition(t) for t in ctrl['triggeralls'] if not is_always_true(t)))
-    numbered = []
-    for num in sorted(ctrl['triggers'].keys()):
-        conds = tuple(sorted(clean_condition(c) for c in ctrl['triggers'][num] if not is_always_true(c)))
-        if conds:
-            numbered.append(conds)
-    numbered = tuple(numbered)
-    persistent = ctrl.get('persistent')
-    ignorehitpause = ctrl.get('ignorehitpause')
-    return (talls, numbered, persistent, ignorehitpause)
-
-def strip_outer_parens(cond: str) -> str:
-    """Remove one pair of outer parentheses if they wrap the whole expression."""
-    if not cond:
-        return cond
-    cond = cond.strip()
-    if cond.startswith('(') and cond.endswith(')'):
-        depth = 0
-        for i, ch in enumerate(cond):
-            if ch == '(':
-                depth += 1
-            elif ch == ')':
-                depth -= 1
-                if depth == 0:
-                    if i == len(cond) - 1:
-                        return cond[1:-1].strip()
-                    else:
-                        break
-    return cond
-
-# ----------------------------------------------------------------------
-# ZSS state generation
-# ----------------------------------------------------------------------
-def generate_zss_state(state):
-    """Convert a parsed state dictionary into ZSS syntax."""
-    out_lines = []
-    out_lines.append("#============================================================")
-    out_lines.append(f"# State {state['no']}")
-    out_lines.append("#============================================================")
-    out_lines.append("")
-
-    # Attributes
-    attr_parts = []
-    for k, v in state['attributes'].items():
-        comment = state['attr_comments'].get(k)
-        if comment:
-            attr_parts.append(f"\t{k}: {v}; {comment}")
-        else:
-            attr_parts.append(f"\t{k}: {v};")
-    if attr_parts:
-        attr_line = f"[StateDef {state['no']};\n" + "\n".join(attr_parts) + "\n]"
-    else:
-        attr_line = f"[StateDef {state['no']}]"
-    out_lines.append(attr_line)
-
-    # Pure comments (lines that were only '; comment')
-    if state.get('pure_comments'):
-        for comment in state['pure_comments']:
-            out_lines.append(comment)
-        if state['controllers']:
-            out_lines.append('')
-    elif state['controllers']:
-        out_lines.append('')
-
-    # Merge controllers with identical trigger keys
-    merged_groups = []
-    current_group = []
-    current_key = None
-    for ctrl in state['controllers']:
-        key = get_trigger_key(ctrl)
-        if key == current_key:
-            current_group.append(ctrl)
-        else:
-            if current_group:
-                merged_groups.append(current_group)
-            current_group = [ctrl]
-            current_key = key
-    if current_group:
-        merged_groups.append(current_group)
-
-    for group in merged_groups:
-        first = group[0]
-        talls = [clean_condition(t) for t in first['triggeralls'] if not is_always_true(t)]
-        numbered = []
-        for num in sorted(first['triggers'].keys()):
-            conds = [clean_condition(c) for c in first['triggers'][num] if not is_always_true(c)]
-            if conds:
-                numbered.append(conds)
-        persistent_val = first.get('persistent')
-        ignorehitpause_val = first.get('ignorehitpause')
-
-        has_assign = False
-        # Check triggers
-        for cond in talls:
-            if ':=' in cond:
-                has_assign = True
-        for conds in numbered:
-            for cond in conds:
-                if ':=' in cond:
-                    has_assign = True
-        # Check parameter lines in all controllers of the group
-        for ctrl in group:
-            for line in ctrl.get('raw_block', []):
-                code_part, _ = split_code_and_comment(line)
-                if code_part and ':=' in code_part:
-                    has_assign = True
-
-        comments = [ctrl.get('comment') for ctrl in group if ctrl.get('comment') is not None]
-        all_comments_identical = len(set(comments)) == 1 and len(comments) == len(group)
-        merged_comment = comments[0] if all_comments_identical else None
-
-        inner_block_lines = []
-        raw_blocks = []
-        for ctrl in group:
-            if not all_comments_identical:
-                comment = ctrl.get('comment')
-                if comment:
-                    inner_block_lines.append(f"# {comment}")
-            body = format_controller_body(
-                ctrl['type'],
-                ctrl['params'],
-                ctrl.get('param_comments', OrderedDict()),
-                ctrl.get('duplicates', []),
-                ctrl.get('ignorehitpause')
+        for key, value in duplicates:
+            lines.append(
+                f'\t# WARNING: duplicate parameter: {key}: {value}'
             )
-            inner_block_lines.extend(body.splitlines())
-            if has_assign:
-                raw_blocks.append(ctrl.get('raw_block', []))
 
-        def wrap_if_needed(expr):
-            if re.search(r'&&|\|\|', expr):
-                return f"({expr})"
-            return expr
+        lines.append('}')
+        return '\n'.join(lines)
 
-        if talls:
-            and_parts = [wrap_if_needed(c) for c in talls]
-            outer_cond = "\n".join([and_parts[0]] + [f"&& {p}" for p in and_parts[1:]])
+    return one_line
+
+
+def get_trigger_key(controller):
+    """Create a key for merging controllers."""
+    triggeralls = tuple(sorted(
+        clean_condition(condition)
+        for condition in controller['triggeralls']
+        if not is_always_true(condition)
+    ))
+
+    numbered = []
+
+    for number in sorted(controller['triggers']):
+        conditions = tuple(sorted(
+            clean_condition(condition)
+            for condition in controller['triggers'][number]
+            if not is_always_true(condition)
+        ))
+
+        if conditions:
+            numbered.append(conditions)
+
+    return (
+        triggeralls,
+        tuple(numbered),
+        controller.get('persistent'),
+        controller.get('ignorehitpause'),
+    )
+
+
+def strip_outer_parens(condition):
+    """Remove one redundant pair of outer parentheses."""
+    condition = condition.strip()
+
+    if not (
+        condition.startswith('(')
+        and condition.endswith(')')
+    ):
+        return condition
+
+    depth = 0
+
+    for index, char in enumerate(condition):
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+
+            if depth == 0:
+                if index == len(condition) - 1:
+                    return condition[1:-1].strip()
+                break
+
+    return condition
+
+
+# ----------------------------------------------------------------------
+# ZSS generation
+# ----------------------------------------------------------------------
+
+def generate_zss_state(state):
+    """Generate ZSS for one parsed state."""
+    output = [
+        '#============================================================',
+        f"# State {state['no']}",
+        '#============================================================',
+        '',
+    ]
+
+    attributes = []
+
+    for key, value in state['attributes'].items():
+        comment = state['attr_comments'].get(key)
+
+        if comment:
+            attributes.append(f'\t{key}: {value}; {comment}')
         else:
-            outer_cond = None
+            attributes.append(f'\t{key}: {value};')
 
+    if attributes:
+        output.append(
+            f"[StateDef {state['no']};\n"
+            + '\n'.join(attributes)
+            + '\n]'
+        )
+    else:
+        output.append(f"[StateDef {state['no']}]")
+
+    for comment in state.get('pure_comments', []):
+        output.append(comment)
+
+    if state['controllers']:
+        output.append('')
+
+    groups = []
+    current = []
+    current_key = None
+
+    for controller in state['controllers']:
+        key = get_trigger_key(controller)
+
+        if key == current_key:
+            current.append(controller)
+        else:
+            if current:
+                groups.append(current)
+
+            current = [controller]
+            current_key = key
+
+    if current:
+        groups.append(current)
+
+    for group in groups:
+        first = group[0]
+
+        triggeralls = [
+            clean_condition(condition)
+            for condition in first['triggeralls']
+            if not is_always_true(condition)
+        ]
+
+        numbered = []
+
+        for number in sorted(first['triggers']):
+            conditions = [
+                clean_condition(condition)
+                for condition in first['triggers'][number]
+                if not is_always_true(condition)
+            ]
+
+            if conditions:
+                numbered.append(conditions)
+
+        body_lines = []
+        comments = [
+            controller.get('comment')
+            for controller in group
+            if controller.get('comment') is not None
+        ]
+
+        comments_identical = (
+            len(comments) == len(group)
+            and len(set(comments)) == 1
+        )
+
+        for controller in group:
+            if not comments_identical and controller.get('comment'):
+                body_lines.append(f"# {controller['comment']}")
+
+            body_lines.extend(
+                controller.get('pure_comments', [])
+            )
+
+            for name in ('type', 'persistent', 'ignorehitpause'):
+                comment = controller.get(
+                    'special_comments',
+                    {},
+                ).get(name)
+
+                if comment:
+                    body_lines.append(comment.strip())
+
+            body = format_controller_body(
+                controller['type'],
+                controller['params'],
+                controller.get('param_comments', {}),
+                controller.get('duplicates', []),
+                controller.get('ignorehitpause'),
+            )
+
+            body_lines.extend(body.splitlines())
+
+            raw_block = controller.get('raw_block', [])
+
+            controller_has_assignment = any(
+                ':=' in split_code_and_comment(raw_line)[0]
+                for raw_line in raw_block
+            )
+
+            if controller_has_assignment:
+                warning_lines = [
+                    '# WARNING: assignment operator `:=` found in expression. '
+                    'Manual adjustment required.',
+                    '# Original CNS block:',
+                ]
+
+                warning_lines.extend(
+                    '# ' + raw_line.rstrip()
+                    for raw_line in raw_block
+                )
+
+                # Put the warning immediately before this controller's
+                # generated body rather than before the whole merged group.
+                body_start = len(body_lines) - len(body.splitlines())
+                body_lines[body_start:body_start] = warning_lines
+
+        def wrap(expression):
+            if re.search(r'&&|\|\|', expression):
+                return f'({expression})'
+            return expression
+
+        outer = None
+        if triggeralls:
+            parts = [wrap(condition) for condition in triggeralls]
+            outer = '\n'.join(
+                [parts[0]] + [f'&& {part}' for part in parts[1:]]
+            )
+            outer = strip_outer_parens(outer)
+
+        inner = None
         if numbered:
-            or_terms = []
-            for conds in numbered:
-                if len(conds) == 1:
-                    term = wrap_if_needed(conds[0])
+            terms = []
+
+            for conditions in numbered:
+                if len(conditions) == 1:
+                    terms.append(wrap(conditions[0]))
                 else:
-                    sub_parts = [wrap_if_needed(c) for c in conds]
-                    term = "\n".join([sub_parts[0]] + [f"&& {p}" for p in sub_parts[1:]])
-                or_terms.append(term)
-            if len(or_terms) == 1:
-                inner_cond = or_terms[0]
+                    parts = [wrap(condition) for condition in conditions]
+                    terms.append('(' + '\n'.join(
+                        [parts[0]] + [f'&& {part}' for part in parts[1:]]
+                    ) + ')')
+
+            inner = terms[0] if len(terms) == 1 else '\n'.join(
+                [terms[0]] + [f'|| {term}' for term in terms[1:]]
+            )
+            inner = strip_outer_parens(inner)
+
+        persistent = first.get('persistent')
+        ignorehitpause = first.get('ignorehitpause')
+        modifiers = []
+
+        if persistent is not None:
+            modifiers.append(f'persistent({persistent})')
+
+        if ignorehitpause not in (None, '0'):
+            modifiers.append('ignorehitpause')
+
+        prefix = ' '.join(modifiers)
+        prefix = f'{prefix} ' if prefix else ''
+
+        def indent_line(line, level):
+            if not line:
+                return ''
+            return '\t' * level + line
+
+        if comments_identical:
+            output.append(f'# {comments[0]}')
+
+        if outer is None and inner is None:
+            if prefix:
+                output.append(f'{prefix}{{')
+
+                for line in body_lines:
+                    output.append(indent_line(line, 1))
+
+                output.append('}')
             else:
-                inner_cond = "\n".join([or_terms[0]] + [f"|| {t}" for t in or_terms[1:]])
-                if outer_cond is not None:
-                    inner_cond = f"({inner_cond})"
+                output.extend(body_lines)
+        elif outer is None:
+            output.append(f'{prefix}if {inner} {{')
+            output.extend(indent_line(line, 1) for line in body_lines)
+            output.append('}')
+        elif inner is None:
+            output.append(f'{prefix}if {outer} {{')
+            output.extend(indent_line(line, 1) for line in body_lines)
+            output.append('}')
         else:
-            inner_cond = None
+            output.append(f'{prefix}if {outer} {{')
+            output.append(f'\tif {inner} {{')
+            output.extend(indent_line(line, 2) for line in body_lines)
+            output.append('\t}')
+            output.append('}')
 
-        if outer_cond is not None:
-            outer_cond = strip_outer_parens(outer_cond)
-        if inner_cond is not None:
-            inner_cond = strip_outer_parens(inner_cond)
+        output.append('')
 
-        if outer_cond is not None and inner_cond and '\n' in inner_cond:
-            lines = inner_cond.split('\n')
-            inner_cond = lines[0] + '\n' + '\n'.join('\t' + line for line in lines[1:])
+    return '\n'.join(output)
 
-        if has_assign:
-            out_lines.append("# WARNING: assignment operator `:=` found in expression. Manual adjustment required.")
-            for raw_block in raw_blocks:
-                out_lines.append("# Original CNS block:")
-                for line in raw_block:
-                    out_lines.append("# " + line.rstrip())
-
-        mods = []
-        if persistent_val is not None:
-            mods.append(f"persistent({persistent_val})")
-        if ignorehitpause_val is not None and ignorehitpause_val != '0':
-            mods.append("ignorehitpause")
-        mod_str = " ".join(mods) + " " if mods else ""
-
-        if merged_comment:
-            out_lines.append(f"# {merged_comment}")
-
-        if outer_cond is None and inner_cond is None:
-            if mods:
-                out_lines.append(f"{mod_str}{{")
-                for line in inner_block_lines:
-                    out_lines.append(f"\t{line}")
-                out_lines.append("}")
-            else:
-                out_lines.extend(inner_block_lines)
-        elif outer_cond is None:
-            out_lines.append(f"{mod_str}if {inner_cond} {{")
-            for line in inner_block_lines:
-                out_lines.append(f"\t{line}")
-            out_lines.append("}")
-        elif inner_cond is None:
-            out_lines.append(f"{mod_str}if {outer_cond} {{")
-            for line in inner_block_lines:
-                out_lines.append(f"\t{line}")
-            out_lines.append("}")
-        else:
-            out_lines.append(f"{mod_str}if {outer_cond} {{")
-            out_lines.append(f"\tif {inner_cond} {{")
-            for line in inner_block_lines:
-                out_lines.append(f"\t\t{line}")
-            out_lines.append("\t}")
-            out_lines.append("}")
-        out_lines.append("")
-    return "\n".join(out_lines)
 
 # ----------------------------------------------------------------------
-# Main conversion function
+# Main conversion
 # ----------------------------------------------------------------------
+
 def convert_cns_to_zss(content: str) -> str:
-    """Convert entire CNS file content to ZSS format."""
+    """Convert complete CNS content to ZSS."""
+    if not any(
+        STATEDEF_RE.match(strip_comment_for_parsing(line))
+        for line in content.splitlines()
+    ):
+        return '(NO_STATEDDEF)'
+
     lines = content.splitlines()
-    out_lines = []
-    i = 0
-    total = len(lines)
+    output = []
     pending = []
-    seen_states = set()        # Track state numbers seen in this file
+    seen_states = set()
+    index = 0
 
-    while i < total:
-        raw_line = lines[i]
+    while index < len(lines):
+        raw_line = lines[index]
 
-        # Buffer standalone comment lines (starts with ';')
         if raw_line.lstrip().startswith(';'):
-            comment_text = raw_line.lstrip()[1:].rstrip()
-            if comment_text:
-                pending.append('#' + comment_text)
-            i += 1
+            text = raw_line.lstrip()[1:].rstrip()
+
+            if text:
+                pending.append('#' + text)
+
+            index += 1
             continue
 
-        # Buffer blank lines
-        if raw_line.strip() == '':
+        if not raw_line.strip():
             pending.append('')
-            i += 1
+            index += 1
             continue
 
         stripped = strip_comment_for_parsing(raw_line)
-        if not stripped:
-            if pending:
-                out_lines.extend(pending)
-                pending = []
-            out_lines.append(raw_line)
-            i += 1
-            continue
 
-        # [Statedef] found – check for duplicate state number
-        m = re.match(r'\[\s*Statedef\s+(-?\d+)\s*\]', stripped, re.IGNORECASE)
-        if m:
-            state_no = int(m.group(1))
-            if state_no in seen_states:
-                # Duplicate state – remove the entire block
+        statedef_match = STATEDEF_RE.match(stripped)
+
+        if statedef_match:
+            number_match = re.search(
+                r'Statedef\s+(-?\d+)',
+                stripped,
+                re.IGNORECASE,
+            )
+            state_number = int(number_match.group(1))
+
+            if state_number in seen_states:
                 if pending:
-                    out_lines.extend(pending)
+                    output.extend(pending)
                     pending = []
-                out_lines.append(f"# WARNING: Duplicate state {state_no} removed")
-                # Skip to the next [Statedef] or end of file
-                i += 1
-                while i < total:
-                    nxt = lines[i]
-                    nxt_stripped = strip_comment_for_parsing(nxt)
-                    if nxt_stripped and re.match(r'\[\s*Statedef', nxt_stripped, re.IGNORECASE):
+
+                output.append(
+                    f'# WARNING: Duplicate state {state_number} removed'
+                )
+
+                index += 1
+
+                while index < len(lines):
+                    next_stripped = strip_comment_for_parsing(lines[index])
+
+                    if STATEDEF_RE.match(next_stripped):
                         break
-                    i += 1
+
+                    index += 1
+
                 continue
-            else:
-                seen_states.add(state_no)
+
+            seen_states.add(state_number)
 
             if pending:
                 while pending and pending[-1] == '':
                     pending.pop()
-                out_lines.extend(pending)
-                out_lines.append('')
+
+                output.extend(pending)
+                output.append('')
                 pending = []
 
             state_lines = [raw_line]
-            j = i + 1
-            while j < total:
-                nxt = lines[j]
-                nxt_code, _ = split_code_and_comment(nxt)
-                if nxt_code is None or nxt_code.strip() == '':
-                    nxt_comment = nxt.lstrip()[1:].rstrip() if nxt.lstrip().startswith(';') else ''
-                    if re.search(r'<[^>]+>', nxt_comment):
-                        break
-                    state_lines.append(nxt)
-                    j += 1
+            end = index + 1
+
+            while end < len(lines):
+                next_line = lines[end]
+                next_code, _ = split_code_and_comment(next_line)
+                next_stripped = strip_comment_for_parsing(next_line)
+
+                if not next_code.strip():
+                    state_lines.append(next_line)
+                    end += 1
                     continue
-                nxt_stripped = strip_comment_for_parsing(nxt)
-                if nxt_stripped.startswith('[') and re.match(r'\[\s*Statedef', nxt_stripped, re.IGNORECASE):
+
+                if STATEDEF_RE.match(next_stripped):
                     break
-                state_lines.append(nxt)
-                j += 1
+
+                if (
+                    next_stripped.startswith('[')
+                    and not is_controller_header(next_stripped)
+                ):
+                    break
+
+                state_lines.append(next_line)
+                end += 1
+
+            # Do not attach separator comments before the next section to
+            # the preceding state. Leave them for the main loop so they are
+            # emitted before the next state or section.
+            body_end = len(state_lines)
+
+            while body_end > 1 and is_comment_or_blank(
+                state_lines[body_end - 1]
+            ):
+                body_end -= 1
+
+            state_lines = state_lines[:body_end]
+            next_index = index + body_end
 
             state = parse_state_block(state_lines)
-            if state['no'] is not None:
-                out_lines.append(generate_zss_state(state))
-            i = j
+            output.append(generate_zss_state(state))
+            index = next_index
             continue
 
-        # Non‑state section (e.g., [Files], [Cmd]) – remove
         if stripped.startswith('['):
             if pending:
-                out_lines.extend(pending)
+                output.extend(pending)
                 pending = []
-            out_lines.append(f"# Removed [{stripped[1:-1]}] section")
-            j = i + 1
-            while j < total:
-                nxt_stripped = strip_comment_for_parsing(lines[j])
-                if nxt_stripped and nxt_stripped.startswith('['):
+
+            output.append(f'# Removed [{stripped[1:-1]}] section')
+
+            end = index + 1
+
+            while end < len(lines):
+                next_stripped = strip_comment_for_parsing(lines[end])
+
+                if next_stripped and next_stripped.startswith('['):
                     break
-                j += 1
-            i = j
+
+                end += 1
+
+            index = end
             continue
 
-        # Any other line – flush pending and output as is
         if pending:
-            out_lines.extend(pending)
+            output.extend(pending)
             pending = []
-        out_lines.append(raw_line)
-        i += 1
+
+        output.append(raw_line)
+        index += 1
 
     if pending:
-        out_lines.extend(pending)
+        output.extend(pending)
 
-    # Collapse multiple consecutive blank lines into a single blank line
+    # Collapse multiple consecutive blank lines that are represented as
+    # separate output lines. Embedded blank lines in generated state strings
+    # are intentionally preserved.
     result = []
-    prev_blank = False
-    for line in out_lines:
+    previous_blank = False
+
+    for line in output:
         if line == '':
-            if not prev_blank:
+            if not previous_blank:
                 result.append(line)
-                prev_blank = True
+
+            previous_blank = True
         else:
             result.append(line)
-            prev_blank = False
-    return "\n".join(result)
+            previous_blank = False
+
+    final_result = '\n'.join(result)
+
+    # Always terminate generated ZSS files with one standard LF line break.
+    return final_result.rstrip('\n') + '\n'
+
 
 # ----------------------------------------------------------------------
-# File I/O and main entry point
+# File I/O and command-line entry point
 # ----------------------------------------------------------------------
+
 def read_file_with_encoding(filepath):
-    """Read file trying common encodings (UTF‑8, Shift-JIS, CP932)."""
-    encodings = ['utf-8', 'shift_jis', 'cp932']
-    for enc in encodings:
+    """Read a file trying common encodings."""
+    for encoding in (
+        'utf-8-sig',
+        'shift_jis',
+        'cp932',
+        'latin-1',
+    ):
         try:
-            with open(filepath, 'r', encoding=enc) as f:
-                return f.read(), enc
+            with open(filepath, 'r', encoding=encoding) as file:
+                return file.read(), encoding
         except (UnicodeDecodeError, LookupError):
             continue
-    with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
-        return f.read(), 'utf-8'
+
+    raise UnicodeError(f'Could not decode file: {filepath}')
+
 
 def confirm_overwrite(filepath):
     """Ask user for confirmation before overwriting an existing file."""
     while True:
-        answer = input(f"File '{filepath}' already exists. Overwrite? (y/N): ").strip().lower()
+        answer = input(
+            f"File '{filepath}' already exists. Overwrite? (y/N): "
+        ).strip().lower()
+
         if answer in ('y', 'yes'):
             return True
+
         if answer in ('n', 'no', ''):
             return False
+
         print("Please answer 'y' or 'n'.")
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print("Usage: python cns2zss.py input.cns [output.zss]")
+        print('Usage: python cns2zss.py input.cns [output.zss]')
         sys.exit(1)
 
     infile = sys.argv[1]
-    outfile = sys.argv[2] if len(sys.argv) > 2 else infile + ".zss"
+    outfile = sys.argv[2] if len(sys.argv) > 2 else infile + '.zss'
 
     if os.path.exists(outfile) and not confirm_overwrite(outfile):
-        print("Conversion cancelled.")
+        print('Conversion cancelled.')
         sys.exit(0)
 
-    cns_data, used_encoding = read_file_with_encoding(infile)
+    cns_data, _ = read_file_with_encoding(infile)
+
     try:
         zss_data = convert_cns_to_zss(cns_data)
-        with open(outfile, 'w', encoding=used_encoding, errors='replace') as f:
-            f.write(zss_data)
-        print(f"Converted {infile} -> {outfile} (encoding: {used_encoding})")
-    except Exception as e:
-        print(f"Error: {e}")
+
+        if zss_data == '(NO_STATEDDEF)':
+            print(
+                f'Skipped {infile}: no [Statedef] found, '
+                'file left unchanged.'
+            )
+        else:
+            with open(outfile, 'w', encoding='utf-8') as file:
+                file.write(zss_data)
+
+            print(f'Converted {infile} -> {outfile} (encoding: utf-8)')
+
+    except Exception as error:
+        print(f'Error: {error}')
         sys.exit(1)
