@@ -1,0 +1,109 @@
+; File prelude comment
+; <not a section separator>
+
+[Data]
+life = 1000
+
+[Statedef 0]
+type = S ; State type
+ctrl = 1
+; Pure comment inside the state
+; <ordinary comment>
+;
+
+[State 0, Explod]
+type = Explod
+trigger1 = time = 0
+persistent = 2 ; Persistent comment
+ignorehitpause = 1 ; Ignore comment
+anim = 10
+pos = 1, 2
+scale = 1, 1
+
+[State 0, PlaySnd]
+type = PlaySnd
+trigger1 = time = 0
+value = 1, 0
+
+; Comment between states
+; Another comment between states
+
+[Statedef 10]
+type = S
+
+[State 10, TriggerGrouping]
+type = ChangeState
+trigger3 = C
+trigger1 = 1
+trigger2 = B
+trigger1 = A
+trigger3 = D
+trigger4 = E
+trigger4 = F
+value = 20
+
+[State 10, VarSet]
+type = VarSet
+trigger1 = 1
+var(1) = 5 ; Variable comment
+
+[State 10, ParentVarAdd]
+type = parentvaradd
+trigger1 = 1
+var(2) = 1
+value = 3
+
+[State 10, DuplicateParameter]
+type = DisplayToClipboard
+trigger1 = 1
+text = "first"
+text = "second"
+
+[State 10, AssignmentInParameter]
+type = DisplayToClipboard
+trigger1 = 1
+text = "assignment %d"
+params = var(0) := 1
+
+; Pure comment immediately before the next state
+
+[Statedef 20]
+type = A
+movetype = A
+physics = N
+
+[State 20, ModifyExplod]
+type = ModifyExplod
+trigger1 = 1
+id = 1
+anim = 2
+pos = 0, 0
+ignorehitpause = 1
+
+[State 20, AfterImage]
+type = AfterImage
+trigger1 = 1
+time = 2
+length = 5
+paladd = 1, 2, 3
+ignorehitpause = 1
+
+[State 20, OutOfOrderTriggers]
+type = ChangeState
+trigger2 = B
+trigger1 = A
+trigger2 = C
+trigger1 = D
+value = 0
+
+[State 20, EmptyController]
+type = Null
+trigger1 = 1
+
+[State 20, AngleComment]
+type = Null
+; Comment containing <angle brackets>
+trigger1 = 1
+
+[Statedef 20]
+type = C

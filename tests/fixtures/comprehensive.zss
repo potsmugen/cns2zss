@@ -1,0 +1,126 @@
+# File prelude comment
+# <not a section separator>
+
+# Removed [Data] section
+#============================================================
+# State 0
+#============================================================
+
+[StateDef 0;
+	type: S; # State type
+	ctrl: 1;
+]
+#Pure comment inside the state
+#<ordinary comment>
+
+# Explod
+persistent(2) ignorehitpause if time = 0 {
+	# Persistent comment
+	# Ignore comment
+	Explod{
+		ignorehitpause: 1;
+		anim: 10;
+		pos: 1, 2;
+		scale: 1, 1;
+	}
+}
+
+# PlaySnd
+if time = 0 {
+	PlaySnd{value: 1, 0}
+}
+
+
+# Comment between states
+# Another comment between states
+
+#============================================================
+# State 10
+#============================================================
+
+[StateDef 10;
+	type: S;
+]
+
+# TriggerGrouping
+if A
+|| B
+|| (C
+&& D)
+|| (E
+&& F) {
+	ChangeState{value: 20}
+}
+
+# VarSet
+varSet{
+	v: 1; # Variable comment
+	value: 5;
+}
+# ParentVarAdd
+varAdd{
+	v: 2;
+	value: 1;
+	# WARNING: duplicate parameter: value: 3
+}
+# DuplicateParameter
+DisplayToClipboard{
+	text: "first";
+	# WARNING: duplicate parameter: text: "second"
+}
+# AssignmentInParameter
+# WARNING: assignment operator `:=` found in expression. Manual adjustment required.
+# Original CNS block:
+# [State 10, AssignmentInParameter]
+# type = DisplayToClipboard
+# trigger1 = 1
+# text = "assignment %d"
+# params = var(0) := 1
+DisplayToClipboard{text: "assignment %d"; params: var(0) := 1}
+
+
+# Pure comment immediately before the next state
+
+#============================================================
+# State 20
+#============================================================
+
+[StateDef 20;
+	type: A;
+	movetype: A;
+	physics: N;
+]
+
+ignorehitpause {
+	# ModifyExplod
+	ModifyExplod{
+		ignorehitpause: 1;
+		id: 1;
+		anim: 2;
+		pos: 0, 0;
+	}
+	# AfterImage
+	AfterImage{
+		ignorehitpause: 1;
+		time: 2;
+		length: 5;
+		paladd: 1, 2, 3;
+	}
+}
+
+# OutOfOrderTriggers
+if (A
+&& D)
+|| (B
+&& C) {
+	ChangeState{value: 0}
+}
+
+# EmptyController
+Null{}
+# AngleComment
+# Comment containing <angle brackets>
+Null{}
+
+
+# WARNING: Duplicate state 20 removed
