@@ -9,14 +9,36 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 
-from cns2zss import convert_cns_to_zss, read_file_with_encoding
+from cns2zss import (
+    convert_cns_to_zss,
+    read_file_with_encoding,
+    write_file_atomically,
+)
+
+
+def resource_path(relative_path):
+    """Return a resource path that works from source and PyInstaller builds."""
+    base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
 
 
 class CNS2ZSSApp:
     def __init__(self, root):
         self.root = root
-        root.title("CNS to ZSS Converter GUI")
+        self.cancel_event = threading.Event()
+        self.conversion_active = False
+        self.worker_thread = None
+        self.close_when_done = False
+        root.title("CNS to ZSS Converter")
         root.geometry("750x550")
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
+        if sys.platform == "win32":
+            root.iconbitmap(resource_path(os.path.join("assets", "icon.ico")))
+        else:
+            self.window_icon = tk.PhotoImage(
+                file=resource_path(os.path.join("assets", "icon.png"))
+            )
+            root.iconphoto(True, self.window_icon)
 
         # File selection
         tk.Label(
@@ -30,6 +52,7 @@ class CNS2ZSSApp:
             height=6
         )
         self.file_listbox.pack(fill='x', padx=5, pady=2)
+        self.file_listbox.bind("<Double-Button-1>", self.open_input_file)
 
         # Button row - centered
         btn_frame = tk.Frame(root)
@@ -76,6 +99,14 @@ class CNS2ZSSApp:
             command=lambda: self.convert_files(use_selection=False)
         )
         self.convert_all_btn.pack(side='left', padx=5)
+
+        self.cancel_btn = tk.Button(
+            convert_frame,
+            text="Cancel Batch",
+            command=self.cancel_conversion,
+            state='disabled'
+        )
+        self.cancel_btn.pack(side='left', padx=5)
 
         # Log area
         tk.Label(
@@ -127,6 +158,35 @@ class CNS2ZSSApp:
     def clear_log(self):
         self.log_text.delete(1.0, tk.END)
 
+    def open_input_file(self, event):
+        """Open the double-clicked input file with its default application."""
+        index = self.file_listbox.nearest(event.y)
+        row = self.file_listbox.bbox(index)
+        if row is None or not row[1] <= event.y < row[1] + row[3]:
+            return "break"
+
+        filepath = self.file_listbox.get(index)
+        if not os.path.isfile(filepath):
+            messagebox.showerror("Error", f"File does not exist: {filepath}")
+            return "break"
+
+        self._open_with_default_app(filepath, "file")
+        return "break"
+
+    def _open_with_default_app(self, path, description):
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as error:
+            messagebox.showerror(
+                "Error",
+                f"Could not open {description}: {error}"
+            )
+
     def open_location(self):
         """Open the OS file browser at the folder of the selected file."""
         selection = self.file_listbox.curselection()
@@ -148,18 +208,7 @@ class CNS2ZSSApp:
             )
             return
 
-        try:
-            if sys.platform == "win32":
-                os.startfile(folder)
-            elif sys.platform == "darwin":
-                subprocess.run(["open", folder], check=False)
-            else:
-                subprocess.run(["xdg-open", folder], check=False)
-        except Exception as error:
-            messagebox.showerror(
-                "Error",
-                f"Could not open folder: {error}"
-            )
+        self._open_with_default_app(folder, "folder")
 
     def log(self, msg):
         # Schedule on main thread so it's safe to call from worker threads
@@ -170,6 +219,9 @@ class CNS2ZSSApp:
         self.log_text.see(tk.END)
 
     def convert_files(self, use_selection):
+        if self.conversion_active:
+            return
+
         if use_selection:
             selected = self.file_listbox.curselection()
 
@@ -220,22 +272,57 @@ class CNS2ZSSApp:
             self.log("Nothing to convert (all skipped or cancelled).")
             return
 
+        self.cancel_event.clear()
+        self.conversion_active = True
         self.convert_sel_btn.config(state='disabled')
         self.convert_all_btn.config(state='disabled')
+        self.cancel_btn.config(state='normal')
         self.log(f"Starting conversion of {len(approved)} file(s)...")
 
         # Run the heavy work off the UI thread
-        thread = threading.Thread(
+        self.worker_thread = threading.Thread(
             target=self._convert_worker,
             args=(approved,),
             daemon=True
         )
-        thread.start()
+        self.worker_thread.start()
+
+    def cancel_conversion(self):
+        if not self.conversion_active or self.cancel_event.is_set():
+            return
+
+        if self.worker_thread is not None and not self.worker_thread.is_alive():
+            return
+
+        self.cancel_event.set()
+        self.cancel_btn.config(state='disabled')
+        self.log("Cancellation requested; finishing the current file...")
+
+    def on_close(self):
+        if not self.conversion_active:
+            self.root.destroy()
+            return
+
+        close_after_cancel = messagebox.askyesno(
+            "Conversion in progress",
+            "Cancel the batch and close after the current file finishes?",
+            parent=self.root
+        )
+        if close_after_cancel:
+            self.close_when_done = True
+            self.cancel_conversion()
 
     def _convert_worker(self, paths):
-        success = 0
+        converted = 0
+        skipped = 0
+        failed = 0
+        cancelled = False
 
         for filepath in paths:
+            if self.cancel_event.is_set():
+                cancelled = True
+                break
+
             outpath = filepath + ".zss"
             self.log(f"Processing: {os.path.basename(filepath)}")
 
@@ -248,34 +335,47 @@ class CNS2ZSSApp:
                         "  -> Skipped: no [Statedef] found, "
                         "file left unchanged."
                     )
+                    skipped += 1
                 else:
-                    with open(outpath, 'w', encoding='utf-8') as file:
-                        file.write(zss_data)
-
+                    write_file_atomically(outpath, zss_data)
                     self.log(f"  -> Saved: {outpath}")
-                    success += 1
+                    converted += 1
 
             except Exception as error:
                 self.log(f"  ERROR: {error}")
+                failed += 1
 
         # Hand control back to the main thread for UI updates
         self.root.after(
             0,
             self._convert_done,
-            success,
-            len(paths)
+            converted,
+            skipped,
+            failed,
+            len(paths),
+            cancelled
         )
 
-    def _convert_done(self, success, total):
-        self.log(f"Done. {success} of {total} files converted.")
+    def _convert_done(self, converted, skipped, failed, total, cancelled):
+        status = "Cancelled" if cancelled else "Done"
+        summary = (
+            f"{status}. Converted: {converted}; skipped: {skipped}; "
+            f"failed: {failed}"
+        )
+        if cancelled:
+            not_started = total - converted - skipped - failed
+            summary += f"; not started: {not_started}"
+        summary += f" (of {total} file(s))."
+        self.log(summary)
 
+        self.conversion_active = False
+        self.worker_thread = None
         self.convert_sel_btn.config(state='normal')
         self.convert_all_btn.config(state='normal')
+        self.cancel_btn.config(state='disabled')
 
-        messagebox.showinfo(
-            "Batch Conversion",
-            f"Converted {success} of {total} files."
-        )
+        if self.close_when_done:
+            self.root.destroy()
 
 
 if __name__ == "__main__":

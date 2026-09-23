@@ -16,7 +16,7 @@ Read the `.py` files. This doc is invariants and landmines, not a transcript. Af
 **Entry point:** `convert_cns_to_zss(content: str) -> str`. Returns the sentinel string `'(NO_STATEDDEF)'` if the input contains no `[Statedef]` block (caller should skip writing and log).
 
 **State parser:** `parse_state_block(lines)` parses a `[Statedef ...]` block into:
-- `no`: state number (int)
+- `no`: numeric state number (int), except literal `+1` is retained as a string to distinguish it from `1`
 - `attributes`: dict of state-level keys (insertion order preserved)
 - `attr_comments`: dict of inline comments for attributes
 - `controllers`: list of parsed controller dicts
@@ -34,7 +34,7 @@ Read the `.py` files. This doc is invariants and landmines, not a transcript. Af
 - Conditions: triggerall → outer `if`; numbered triggers → inner `if` with `&&`/`||` chains
 - Formatting: one‑line vs multi‑line based on `MAX_PARAMS_ON_LINE` and `MAX_ONE_LINE_LEN`
 
-**Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It also skips duplicate state definitions (first occurrence kept, later ones removed with a warning comment). `+1` and `1` are distinct (raw string matching). Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`. If the entire file contains no `[Statedef]`, it is returned unchanged (sentinel `(NO_STATEDDEF)`); section stripping only applies once at least one `[Statedef]` exists.
+**Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It skips duplicate state definitions by numeric state number, except literal `+1` remains distinct from `1`. Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`. If the entire file contains no `[Statedef]`, it is returned unchanged (sentinel `(NO_STATEDDEF)`); section stripping only applies once at least one `[Statedef]` exists.
 
 ## Generation philosophy
 
@@ -111,20 +111,19 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## GUI behavior
 
-- One file list. "Convert Selected" converts only selected; "Convert All" converts all.
-- Conversion runs off the UI thread (worker thread); the log updates live and buttons stay responsive.
-- Overwrite confirmation: Yes / No / Cancel (Cancel stops batch). Prompts are a main‑thread pre‑pass before the worker starts.
-- Clear Log button positioned below log window.
-- Open File Location: opens OS file browser (cross‑platform via `os.startfile`/`open`/`xdg-open`).
-- File picker filter: `*.cns *.cmd *.st`.
-- GUI source runs on Windows, macOS, Linux. Pre‑built executable is Windows only.
+- One file list. "Convert Selected" converts only selected; "Convert All" converts all. Double-click opens an input in its OS-default application.
+- Conversion runs off the UI thread; the log reports converted, skipped, failed, and (when cancelled) unstarted files. No completion popup.
+- Cancel Batch stops before the next file; the current file finishes. Closing during conversion asks to cancel and waits for that file before exiting.
+- Overwrite confirmation: Yes / No / Cancel. Prompts are a main-thread pre-pass before the worker starts.
+- Open File Location opens the OS file browser; the file picker accepts `*.cns *.cmd *.st`.
+- Window title is "CNS to ZSS Converter". The same icon artwork is in `assets/icon.png` (macOS/Linux) and `assets/icon.ico` (Windows and executable packaging). Source runs on Windows, macOS, Linux, while the pre-built executable is Windows only.
 
 ## Release process
 
-- Repository contains only source code (`.py`, `README.md`, `LICENSE`).
-- Windows `.exe` built with `pyinstaller --onefile --windowed` and attached to GitHub Releases (never committed to repo).
-- GitHub Actions workflow (`update-latest.yml`) builds `.exe` on every push to `main` and updates a `latest` pre‑release with a `.zip` containing `.exe` + both `.py` files.
-- Versioned releases (e.g., `v1.0`) created by pushing a tag; these are stable (not pre‑release) and appear on repository home page.
+- Source and assets are kept in the repository; generated `.exe` files are never committed.
+- `.github/workflows/releases.yaml` serializes builds on pushes to `main`, moves the `latest` tag to that commit, and recreates the GitHub Release so its published date and generated source archives stay current.
+- The release ZIP contains the executable, both Python scripts, and both formats of the same app icon; the workflow verifies those ZIP entries before publishing.
+- Versioned releases are not built by this workflow.
 
 ## Landmines (do not reintroduce)
 
@@ -132,7 +131,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - **Don't treat `+1` as duplicate of `1`.** Duplicate detection uses raw string, so they are distinct.
 - **Don't check `:=` only in triggers.** Scan every line of every controller.
 - **Don't hardcode `100` for line limit.** Use `MAX_ONE_LINE_LEN` constant.
-- **Don't add `tkinterdnd2` or external pip deps.** GUI is stdlib-only; PyInstaller is a build‑time exception.
+- **Don't add runtime dependencies.** GUI is stdlib-only; PyInstaller is a build‑time exception.
 - **Don't use `tkinter` in core.** Core is pure text processing; GUI imports it.
 - **Don't forget `ignorehitpause` insertion for explod/modifyexplod/afterimage.** It is automatic in `format_controller_body`.
 - **Don't add a `<...>` separator heuristic.** Any comment with angle brackets is an ordinary comment; the old version truncated states.
@@ -145,7 +144,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - `:=` now detected in parameters as well as triggers (fixed).
 - No more double parentheses around OR‑chain terms (fixed).
 - Standalone comments between states are preserved (fixed).
-- `+1` and `1` are distinct states (fixed).
+- Negative and unsigned integer state numbers are supported; literal `+1` is the only accepted plus-prefixed value and remains distinct from `1`.
 - Pure comments inside states are preserved and output after the state block (fixed).
 - Duplicate state definitions are skipped with a warning (fixed).
 - `ignorehitpause` is correctly inserted for explod/modifyexplod/afterimage when set.
@@ -153,6 +152,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - Empty `;` comment lines no longer emit a stray `#`.
 - Files with zero `[Statedef]` return untouched via the `(NO_STATEDDEF)` sentinel.
 - Output is always UTF‑8, not the source file's detected encoding.
+- CLI and GUI output writes use a sibling temporary file and atomic replace, preserving an existing output if writing fails.
 - GUI conversion runs in a worker thread; overwrite prompts are a main‑thread pre‑pass.
 - `open_location` is cross‑platform (`os.startfile` / `open` / `xdg-open`).
 - `OrderedDict` removed; plain `dict` used everywhere (insertion order preserved on Python 3.7+).

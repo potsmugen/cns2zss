@@ -107,3 +107,6 @@ trigger1 = 1
 
 [Statedef 20]
 type = C
+
+[Statedef +1]
+type = S

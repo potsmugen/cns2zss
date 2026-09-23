@@ -2,6 +2,8 @@
 
 A Python script that converts M.U.G.E.N CNS character state files to Ikemen GO ZSS format.
 
+![CNS to ZSS icon](assets/icon.png)
+
 ## What this tool does
 
 - Mechanical syntax conversion.
@@ -125,7 +127,7 @@ if (Vel y > 0) && (Pos y >= 0) {
 
 ## Requirements (source version)
 
-- Python 3.6 or higher
+- Python 3.10 or higher
 
 No external libraries are needed. The GUI uses `tkinter`, which is included with standard Python.  
 The GUI source code runs on Windows, macOS, and Linux. The pre‑built executable is for Windows only.  

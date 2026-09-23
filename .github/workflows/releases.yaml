@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: latest-release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: windows-latest
@@ -28,15 +32,35 @@ jobs:
         run: pip install pyinstaller
 
       - name: Build executable
-        run: pyinstaller --onefile --windowed cns2zss_gui.py
+        run: pyinstaller --onefile --windowed --icon assets/icon.ico --add-data "assets/icon.ico;assets" --add-data "assets/icon.png;assets" cns2zss_gui.py
 
       - name: Prepare release package
         run: |
           mkdir release_package
+          mkdir release_package\assets
           copy dist\cns2zss_gui.exe release_package\
+          copy assets\icon.ico release_package\assets\
+          copy assets\icon.png release_package\assets\
           copy cns2zss.py release_package\
           copy cns2zss_gui.py release_package\
           powershell Compress-Archive -Path release_package\* -DestinationPath cns2zss_latest.zip
+
+      - name: Verify release package
+        run: |
+          python -c 'import zipfile; archive = zipfile.ZipFile("cns2zss_latest.zip"); required = {"cns2zss_gui.exe", "cns2zss.py", "cns2zss_gui.py", "assets/icon.ico", "assets/icon.png"}; missing = required.difference(archive.namelist()); assert not missing, f"Missing release files: {missing}"'
+
+      # Recreate the release to refresh GitHub's source archives and published date.
+      - name: Refresh latest release tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view latest --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release delete latest --yes --cleanup-tag
+            if ($LASTEXITCODE -ne 0) { throw "Could not delete existing latest release" }
+          }
+          git tag -f latest $env:GITHUB_SHA
+          git push --force origin refs/tags/latest
 
       - name: Update latest release
         uses: softprops/action-gh-release@v2
@@ -52,7 +76,8 @@ jobs:
             ### Release package
             - `cns2zss_gui.exe`: Windows executable (no Python required)
             - `cns2zss.py`: core converter (cross‑platform, Python source)
-            - `cns2zss_gui.py`: GUI front‑end (cross‑platform, Python source)
+            - `cns2zss_gui.py`: GUI front-end (cross‑platform, Python source)
+            - `assets/icon.png` and `assets/icon.ico`: the same app icon for cross-platform source GUI and Windows packaging
 
             The Python scripts run on Windows, macOS, and Linux.
         env:

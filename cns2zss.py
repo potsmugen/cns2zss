@@ -8,7 +8,9 @@ Converts Mugen CNS character state files to Ikemen GO ZSS format.
 
 import os
 import re
+import stat
 import sys
+import tempfile
 from collections import defaultdict
 
 
@@ -22,9 +24,14 @@ MAX_PARAMS_ON_LINE = 3
 MAX_ONE_LINE_LEN = 100
 
 STATEDEF_RE = re.compile(
-    r'^\s*\[\s*Statedef\s+-?\d+\s*\]',
+    r'^\s*\[\s*Statedef\s+(\+1|-?\d+)\s*\]',
     re.IGNORECASE,
 )
+
+
+def parse_state_number(statedef_match):
+    number = statedef_match.group(1)
+    return number if number == '+1' else int(number)
 
 
 # ----------------------------------------------------------------------
@@ -202,8 +209,7 @@ def parse_state_block(lines):
 
         statedef_match = STATEDEF_RE.match(stripped)
         if statedef_match:
-            number = re.search(r'Statedef\s+(-?\d+)', stripped, re.I)
-            state['no'] = int(number.group(1))
+            state['no'] = parse_state_number(statedef_match)
             index += 1
             continue
 
@@ -762,12 +768,7 @@ def convert_cns_to_zss(content: str) -> str:
         statedef_match = STATEDEF_RE.match(stripped)
 
         if statedef_match:
-            number_match = re.search(
-                r'Statedef\s+(-?\d+)',
-                stripped,
-                re.IGNORECASE,
-            )
-            state_number = int(number_match.group(1))
+            state_number = parse_state_number(statedef_match)
 
             if state_number in seen_states:
                 if pending:
@@ -899,6 +900,47 @@ def convert_cns_to_zss(content: str) -> str:
 # File I/O and command-line entry point
 # ----------------------------------------------------------------------
 
+def write_file_atomically(filepath, content):
+    """Write UTF-8 text to a sibling temporary file, then replace the target."""
+    output_path = os.path.realpath(os.fspath(filepath))
+    output_dir = os.path.dirname(output_path)
+
+    try:
+        output_mode = stat.S_IMODE(os.stat(output_path).st_mode)
+    except FileNotFoundError:
+        # Restore the mask immediately so new files match normal open() permissions.
+        current_umask = os.umask(0)
+        os.umask(current_umask)
+        output_mode = 0o666 & ~current_umask
+
+    descriptor, temporary_path = tempfile.mkstemp(
+        prefix='.cns2zss-',
+        suffix='.tmp',
+        dir=output_dir,
+    )
+
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as file:
+            file.write(content)
+            file.flush()
+            os.fsync(file.fileno())
+
+        os.chmod(temporary_path, output_mode)
+        os.replace(temporary_path, output_path)
+    except BaseException:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+
+        try:
+            os.unlink(temporary_path)
+        except FileNotFoundError:
+            pass
+
+        raise
+
+
 def read_file_with_encoding(filepath):
     """Read a file trying common encodings."""
     for encoding in (
@@ -955,9 +997,7 @@ if __name__ == '__main__':
                 'file left unchanged.'
             )
         else:
-            with open(outfile, 'w', encoding='utf-8') as file:
-                file.write(zss_data)
-
+            write_file_atomically(outfile, zss_data)
             print(f'Converted {infile} -> {outfile} (encoding: utf-8)')
 
     except Exception as error:
