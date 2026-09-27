@@ -439,6 +439,9 @@ def parse_state_block(lines):
         controller['ignored_triggers'] = []
 
         if 1 not in triggers:
+            controller['ignored_triggers'].append(
+                '# WARNING: no trigger1; the engine rejects this controller'
+            )
             continue
 
         gap = 1

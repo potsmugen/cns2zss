@@ -160,6 +160,17 @@ class CNS2ZSSTest(unittest.TestCase):
             convert_cns_to_zss(source),
         )
 
+    def test_missing_trigger1_is_warned(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\n'
+            'triggerall = A\n'
+        )
+
+        self.assertIn(
+            '# WARNING: no trigger1; the engine rejects this controller',
+            convert_cns_to_zss(source),
+        )
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

@@ -167,6 +167,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Controllers without `trigger1` get a warning (the engine rejects them).
 - `word (` → `word(` tidying no longer touches string literals (it renamed commands like `"a (b)"`).
 - Duplicate `type`/`persistent`/`ignorehitpause` keep the first value like the engine, instead of the last.
 - `map(name) = value` parameters are converted instead of silently dropped.
