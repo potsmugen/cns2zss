@@ -146,6 +146,29 @@ class CNS2ZSSGuiTest(unittest.TestCase):
         self.assertEqual(convert.call_args.args[:2], ('input', False))
         app.log.assert_any_call('  WARNING: State 1: something')
 
+    def test_convert_selected_uses_the_only_file_when_none_selected(self):
+        app = CNS2ZSSApp.__new__(CNS2ZSSApp)
+        app.conversion_active = False
+        app.cancel_event = threading.Event()
+        app.file_listbox = Mock()
+        app.file_listbox.curselection.return_value = ()
+        app.file_listbox.size.return_value = 1
+        app.file_listbox.get.return_value = 'only.cns'
+        app.incorrect_code = Mock()
+        app.incorrect_code.get.return_value = 'Comment out'
+        app.convert_sel_btn = Mock()
+        app.convert_all_btn = Mock()
+        app.cancel_btn = Mock()
+        app.log = Mock()
+
+        with patch('cns2zss_gui.threading.Thread') as thread, patch(
+            'cns2zss_gui.messagebox.showwarning'
+        ) as warning:
+            app.convert_files(use_selection=True)
+
+        warning.assert_not_called()
+        self.assertEqual(thread.call_args.kwargs['args'], (['only.cns'], True))
+
     def test_incorrect_code_dropdown_sets_keep_warnings(self):
         for choice, keep in (('Comment out', True), ('Remove', False)):
             with self.subTest(choice=choice):

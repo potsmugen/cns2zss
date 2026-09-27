@@ -244,6 +244,10 @@ class CNS2ZSSApp:
         if use_selection:
             selected = self.file_listbox.curselection()
 
+            # With a single file listed, there's nothing to choose.
+            if not selected and self.file_listbox.size() == 1:
+                selected = (0,)
+
             if not selected:
                 messagebox.showwarning(
                     "No selection",

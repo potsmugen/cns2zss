@@ -166,7 +166,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## GUI behavior
 
-- One file list. "Convert Selected" converts only selected; "Convert All" converts all. Double-click opens an input in its OS-default application.
+- One file list. "Convert Selected" converts only selected (or the only file, if just one is listed and none is selected); "Convert All" converts all. Double-click opens an input in its OS-default application.
 - Conversion runs off the UI thread; the log reports converted, skipped, failed, and (when cancelled) unstarted files. No completion popup.
 - Cancel Batch stops before the next file; the current file finishes. Closing during conversion asks to cancel and waits for that file before exiting.
 - Overwrite confirmation: Yes / No / Cancel. Prompts are a main-thread pre-pass before the worker starts.
