@@ -298,6 +298,7 @@ def parse_state_block(lines):
                 'triggers': defaultdict(list),
                 'params': {},
                 'param_comments': {},
+                'comments_after': {},
                 'special_comments': {},
                 'duplicates': [],
                 'trigger_warnings': [],
@@ -312,6 +313,7 @@ def parse_state_block(lines):
             }
 
             seen_params = set()
+            pending_comments = []
 
             for controller_line in controller_lines:
                 clean_line = strip_comment_for_parsing(controller_line)
@@ -319,8 +321,26 @@ def parse_state_block(lines):
 
                 if not clean_line:
                     if line_comment:
-                        current_controller['pure_comments'].append(line_comment.strip())
+                        pending_comments.append(line_comment.strip())
                     continue
+
+                # Comments between two parameters stay there; others go on top.
+                if pending_comments:
+                    params = current_controller['params']
+                    is_parameter = not re.match(
+                        r'(trigger\w*|type|persistent|ignorehitpause)\s*=',
+                        clean_line,
+                        re.IGNORECASE,
+                    )
+
+                    if params and is_parameter:
+                        current_controller['comments_after'].setdefault(
+                            list(params)[-1], []
+                        ).extend(pending_comments)
+                    else:
+                        current_controller['pure_comments'].extend(pending_comments)
+
+                    pending_comments = []
 
                 trigger_match = re.match(
                     r'(trigger\w*)\s*=\s*(.*)',
@@ -464,6 +484,7 @@ def parse_state_block(lines):
                             line_comment
                         )
 
+            current_controller['pure_comments'].extend(pending_comments)
             continue
 
         if current_controller is None:
@@ -530,8 +551,10 @@ def format_controller_body(
     param_comments,
     duplicates,
     ignorehitpause_val=None,
+    comments_after=None,
 ):
     """Format one controller body."""
+    comments_after = comments_after or {}
     all_params = list(params.items())
 
     if (
@@ -559,6 +582,7 @@ def format_controller_body(
 
     if (
         has_comment
+        or comments_after
         or duplicates
         or len(all_params) > MAX_PARAMS_ON_LINE
         or len(one_line) > MAX_ONE_LINE_LEN
@@ -572,6 +596,8 @@ def format_controller_body(
                 lines.append(f'\t{key}: {value}; {comment}')
             else:
                 lines.append(f'\t{key}: {value};')
+
+            lines.extend(f'\t{line}' for line in comments_after.get(key, []))
 
         for key, value in duplicates:
             lines.append(
@@ -740,6 +766,7 @@ def generate_zss_state(state, keep_warnings=True):
             controller.get('param_comments', {}),
             controller.get('duplicates', []) if keep_warnings else [],
             controller.get('ignorehitpause'),
+            controller.get('comments_after'),
         ).splitlines())
 
         # Wrap operators that bind looser than &&, so joining with && is safe.

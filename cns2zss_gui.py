@@ -112,7 +112,7 @@ class CNS2ZSSApp:
         self.keep_warnings = tk.BooleanVar(value=True)
         tk.Checkbutton(
             root,
-            text="Keep warnings and code the engine ignores (as comments)",
+            text="Keep warnings as commented code",
             variable=self.keep_warnings
         ).pack()
 

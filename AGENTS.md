@@ -105,6 +105,7 @@ Constants in `cns2zss.py`:
 - **Standalone comments:** Lines starting with `;` (after spaces) → `#` and preserved.
 - **Pure comments inside states:** Collected into `state['pure_comments']` and output after the `[StateDef ...]` block.
 - **Inline comments:** Kept as `# comment` on the same line in ZSS.
+- **Comments between parameters:** stay between them (`comments_after` on the preceding parameter; forces multi-line). Comments before the first parameter or before trigger/type lines go above the body.
 - **Header and trigger comments:** `[Statedef]` header comments join the state's pure comments; `[State]` header comments and trigger-line comments (as `# trigger1: text`) go above the controller body, since conditions are rewritten.
 - **Empty `;` lines:** Skipped (no comment text → not emitted).
 
@@ -190,6 +191,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Comments between parameters (e.g. a commented-out parameter) stay in place instead of moving above the controller.
 - New `keep_warnings` option (GUI checkbox, `--no-warnings`); `:=` warnings are never dropped.
 - Invalid `[State]` headers no longer silently drop one controller while converting the ones after it; the rest of the state is kept as comments with a warning, like the engine ignores it.
 - Removing a duplicate state no longer swallows the sections and comments after it.

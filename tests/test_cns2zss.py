@@ -347,6 +347,17 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertIn('# WARNING: no type; the engine rejects this controller', output)
         self.assertIn('# WARNING: no trigger1; the engine rejects this controller', output)
 
+    def test_comments_between_parameters_stay_in_place(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = PosAdd\n'
+            'trigger1 = A\nx = 1\n;y = 2\nz = 3\n'
+        )
+
+        self.assertIn(
+            '\t\tx: 1;\n\t\t#y = 2\n\t\tz: 3;',
+            convert_cns_to_zss(source),
+        )
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):
