@@ -58,7 +58,7 @@ varSet{
 	value: 5;
 }
 # ParentVarAdd
-varAdd{
+parentVarAdd{
 	v: 2;
 	value: 1;
 	# WARNING: duplicate parameter: value: 3

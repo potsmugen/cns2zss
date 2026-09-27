@@ -338,12 +338,17 @@ def parse_state_block(lines):
                     else:
                         value_lower = value.lower()
 
-                        if value_lower in ('varadd', 'parentvaradd'):
-                            current_controller['type'] = 'varAdd'
-                        elif value_lower in ('varset', 'parentvarset'):
-                            current_controller['type'] = 'varSet'
-                        else:
-                            current_controller['type'] = value
+                        # Parent variants must keep their name or they write the wrong player's vars.
+                        type_names = {
+                            'varadd': 'varAdd',
+                            'varset': 'varSet',
+                            'parentvaradd': 'parentVarAdd',
+                            'parentvarset': 'parentVarSet',
+                        }
+                        current_controller['type'] = type_names.get(
+                            value_lower,
+                            value,
+                        )
 
                     if line_comment:
                         current_controller['special_comments'][parameter] = (

@@ -24,7 +24,7 @@ Read the `.py` files. This doc is invariants and landmines, not a transcript. Af
 **Controller parser:** each `[State ...]` becomes a dict with:
 - `type`, `triggeralls`, `triggers` (dict mapping num → list of conds), `params`, `param_comments`, `duplicates`, `persistent`, `ignorehitpause`, `comment`, `raw_block`
 
-**Variable assignment:** `parse_varset_assignment()` matches `var()`, `fvar()`, `sysvar()`, `sysfvar()` and maps to `v`, `fv`, `sysv`, `sysfv` in ZSS. `parentvaradd`/`parentvarset` keep their original type name but use the same parsing.
+**Variable assignment:** `parse_varset_assignment()` matches `var()`, `fvar()`, `sysvar()`, `sysfvar()` and maps to `v`, `fv`, `sysv`, `sysfv` in ZSS. `parentvaradd`/`parentvarset` use the same parsing and keep their parent names (`parentVarAdd`/`parentVarSet`).
 
 **ZSS generation:** `generate_zss_state(state)`:
 - Attributes → `[StateDef N; ... ]`
@@ -34,7 +34,7 @@ Read the `.py` files. This doc is invariants and landmines, not a transcript. Af
 - `persistent` → `persistent(N)` prefix, except in negative states and `+1` (stripped; see below)
 - Formatting: one‑line vs multi‑line based on `MAX_PARAMS_ON_LINE` and `MAX_ONE_LINE_LEN`
 
-**Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It skips duplicate state definitions by numeric state number, except literal `+1` remains distinct from `1`. Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`. If the entire file contains no `[Statedef]`, it is returned unchanged (sentinel `(NO_STATEDDEF)`); section stripping only applies once at least one `[Statedef]` exists.
+**Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It skips duplicate state definitions by numeric state number, except literal `+1` remains distinct from `1`. Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`. If the file contains no `[Statedef]`, the sentinel is returned and the file is left untouched; section stripping only applies once at least one `[Statedef]` exists.
 
 ## Generation philosophy
 
@@ -67,7 +67,7 @@ Constants in `cns2zss.py`:
 
 ### State block collection
 
-A state block runs from one `[Statedef]` to the next `[Statedef]`. Pure comment lines — including those containing `<...>` — are treated as ordinary comments and collected into `state['pure_comments']`; they never terminate the block.
+A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state section. Trailing comments/blank lines are left for whatever follows. Comment lines — including those containing `<...>` — never terminate the block; those before the first controller go to `state['pure_comments']`, later ones stay with their controller.
 
 ### Condition formatting
 
@@ -110,7 +110,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - **Blank lines:** Single blank lines preserved; multiple collapsed to one.
 - **State header:** `[StateDef N;` on its own line, attributes indented, `]` on its own line. If no attributes, `[StateDef N]` (no semicolon).
 - **Pure comments:** Immediately after `[StateDef ...]` block, no blank line; blank line added if controllers follow.
-- **Controllers:** Each block separated by a blank line; body indented one level within `if` or `persistent` wrappers.
+- **Controllers:** Each block separated by a blank line; body indented one level per enclosing `if` / modifier block.
 - **Encoding:** Output is always written as UTF‑8 (Ikemen is encoding‑agnostic on read; decoding→re‑encoding is lossless).
 
 ## GUI behavior
@@ -141,11 +141,11 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - **Don't forget `ignorehitpause` insertion for explod/modifyexplod/afterimage.** It is automatic in `format_controller_body`.
 - **Don't add a `<...>` separator heuristic.** Any comment with angle brackets is an ordinary comment; the old version truncated states.
 - **Don't echo input encoding on write.** Always write UTF‑8.
-- **parentvaradd/parentvarset are mapped to `varAdd`/`varSet`** in the `type` field (same as `varadd`/`varset`). Don't give them separate ZSS type names unless the spec requires it.
+- **Don't map `parentVarSet`/`parentVarAdd` to `varSet`/`varAdd`.** It silently writes the helper's own vars instead of the parent's.
 
 ## Regressions
 
-- `parentvaradd`/`parentvarset` type values are mapped to `varAdd`/`varSet` (matching `varadd`/`varset` behavior).
+- `parentvaradd`/`parentvarset` keep their names instead of becoming `varAdd`/`varSet`.
 - `:=` now detected in parameters as well as triggers (fixed).
 - No more double parentheses around OR‑chain terms (fixed).
 - Standalone comments between states are preserved (fixed).
