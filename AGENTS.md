@@ -20,7 +20,7 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 - Trigger numbers must be contiguous from 1. Checking stops at the first gap: `trigger4` without `trigger3` is ignored (Ikemen warns).
 - `trigger1` is mandatory, even with `triggerall` (Ikemen: "Missing trigger1").
 - A trigger number whose value is constant `1` is always true; constant `0` is never true.
-- `persistent`: default 1; 0 = once per state entry; N = every Nth activation. Ignored in negative states and `+1` (Ikemen stores `+1` as -10).
+- `persistent`: default 1; 0 = once per state entry; N = every Nth time the full condition (triggeralls + triggers) passes. Ignored in negative states and `+1` (Ikemen stores `+1` as -10).
 - `ignorehitpause`: default 0. `persistent` and `ignorehitpause` can't be expressions.
 - Duplicate parameters, including `type`/`persistent`/`ignorehitpause`: first wins, later ones are ignored. Repeated triggers aren't duplicates (that's AND).
 - `var()`, `fvar()`, `sysvar()`, `sysfvar()` and `map()` are valid parameter names. VarSet also takes `v`/`fv`/`sysv`/`sysfv` + `value`; one variable per controller.
@@ -62,7 +62,7 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 - Pure comments → after the state block
 - Each controller gets its own block; controllers are never merged (see Landmines)
 - Conditions: triggerall → outer `if`; numbered triggers → inner `if` with `&&`/`||` chains
-- `persistent` → `persistent(N)` prefix, except in negative states and `+1` (stripped; see below)
+- `persistent` → `persistent(N)` prefix, except in negative states and `+1` (stripped; see below). With both triggerall and numbered triggers it goes on the inner `if`; `ignorehitpause` stays on the outer one.
 - Formatting: one‑line vs multi‑line based on `MAX_PARAMS_ON_LINE` and `MAX_ONE_LINE_LEN`
 
 **Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It skips duplicate state definitions by numeric state number, except literal `+1` remains distinct from `1`. Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`. If the file contains no `[Statedef]`, the sentinel is returned and the file is left untouched; section stripping only applies once at least one `[Statedef]` exists.
@@ -161,6 +161,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - **Don't merge controllers into one block.** CNS checks each controller's triggers when it runs; a merged ZSS block checks once, so an earlier controller's effect (vars, position, anim…) can't stop a later one.
 - **Don't add `else` conversion.** Requires Boolean algebra, out of scope.
 - **Don't treat `+1` as duplicate of `1`.** `+1` stays a string, so they are distinct.
+- **Don't put `persistent` on the outer `if` of a nested pair.** A ZSS block consumes its persistence whenever its own condition passes, so the outer `if` would be used up by the triggeralls alone. MUGEN counts the times the controller would run, i.e. the full condition, which is the inner `if`.
 - **Don't emit `persistent` in negative states or `+1`.** ZSS won't compile it.
 - **Don't check `:=` only in triggers.** Scan every line of every controller.
 - **Don't hardcode `100` for line limit.** Use `MAX_ONE_LINE_LEN` constant.
@@ -174,6 +175,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- `persistent` with triggerall + numbered triggers is on the inner `if`; on the outer one it was consumed when only the triggeralls passed.
 - Continuation lines (`|| ...`, `&& ...`) of nested `if` conditions are indented, matching the README example.
 - Controllers without `type` are kept as commented-out CNS with a warning instead of vanishing.
 - Duplicate StateDef attributes keep the first value like the engine, instead of the last.

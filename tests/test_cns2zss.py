@@ -247,6 +247,17 @@ class CNS2ZSSTest(unittest.TestCase):
             convert_cns_to_zss(source),
         )
 
+    def test_persistent_goes_on_inner_if_with_triggerall(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\n'
+            'triggerall = Ctrl\ntrigger1 = A\npersistent = 0\nignorehitpause = 1\n'
+        )
+
+        self.assertIn(
+            'ignorehitpause if Ctrl {\n\tpersistent(0) if A {',
+            convert_cns_to_zss(source),
+        )
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

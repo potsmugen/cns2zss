@@ -782,10 +782,16 @@ def generate_zss_state(state):
             output.extend(indent_line(line, 1) for line in body_lines)
             output.append('}')
         else:
-            output.append(f'{prefix}if {outer} {{')
+            # persistent counts runs of its own block, so it must sit on the
+            # inner if; on the outer one, triggerall alone would consume it.
+            outer_prefix = 'ignorehitpause ' if 'ignorehitpause' in modifiers else ''
+            inner_prefix = (
+                f'persistent({persistent}) ' if persistent is not None else ''
+            )
+            output.append(f'{outer_prefix}if {outer} {{')
             # Indent the nested condition's continuation lines with it.
             nested = inner.replace('\n', '\n\t')
-            output.append(f'\tif {nested} {{')
+            output.append(f'\t{inner_prefix}if {nested} {{')
             output.extend(indent_line(line, 2) for line in body_lines)
             output.append('\t}')
             output.append('}')
