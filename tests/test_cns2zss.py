@@ -149,6 +149,17 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertIn('Null{', output)
         self.assertIn('# WARNING: duplicate parameter: type: ChangeState', output)
 
+    def test_spaces_in_string_literals_are_kept(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\n'
+            'trigger1 = command = "a (b)" && var (1)\n'
+        )
+
+        self.assertIn(
+            'if command = "a (b)" && var(1) {',
+            convert_cns_to_zss(source),
+        )
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

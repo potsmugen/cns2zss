@@ -167,6 +167,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- `word (` → `word(` tidying no longer touches string literals (it renamed commands like `"a (b)"`).
 - Duplicate `type`/`persistent`/`ignorehitpause` keep the first value like the engine, instead of the last.
 - `map(name) = value` parameters are converted instead of silently dropped.
 - Terms containing `^^` are wrapped in parentheses; `A ^^ B && C` means `A ^^ (B && C)`.

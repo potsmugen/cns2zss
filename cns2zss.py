@@ -125,7 +125,13 @@ def clean_condition(condition: str) -> str:
                     condition = condition[1:-1].strip()
                     break
 
-    return re.sub(r'(\w+)\s+\(', r'\1(', condition)
+    # Tidy `word (` to `word(`, but never inside string literals.
+    parts = re.split(r'("[^"]*")', condition)
+
+    return ''.join(
+        part if index % 2 else re.sub(r'(\w+)\s+\(', r'\1(', part)
+        for index, part in enumerate(parts)
+    )
 
 
 def is_always_true(condition: str) -> bool:
