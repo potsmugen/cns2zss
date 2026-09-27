@@ -160,6 +160,16 @@ def parse_varset_assignment(line: str) -> tuple[str, str, str] | None:
     )
 
 
+def parse_map_assignment(line: str) -> tuple[str, str] | None:
+    """Parse map(name) = value into a quoted map name and value."""
+    match = re.match(r'map\s*\(\s*(.*?)\s*\)\s*=\s*(.*)', line, re.IGNORECASE)
+
+    if not match:
+        return None
+
+    return '"' + match.group(1).strip('"') + '"', match.group(2).strip()
+
+
 def is_controller_header(line: str) -> bool:
     """Return whether a line is a [State ...] controller header."""
     return bool(re.match(
@@ -288,6 +298,26 @@ def parse_state_block(lines):
                     else:
                         number = int(key[7:]) if len(key) > 7 else 1
                         current_controller['triggers'][number].append(condition)
+
+                    continue
+
+                map_assignment = parse_map_assignment(clean_line)
+
+                if map_assignment:
+                    map_name, value_expr = map_assignment
+
+                    if 'map' in seen_params:
+                        current_controller['duplicates'].extend([
+                            ('map', map_name),
+                            ('value', value_expr),
+                        ])
+                    else:
+                        seen_params.update(('map', 'value'))
+                        current_controller['params']['map'] = map_name
+                        current_controller['params']['value'] = value_expr
+
+                    if line_comment:
+                        current_controller['param_comments']['map'] = line_comment
 
                     continue
 

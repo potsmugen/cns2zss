@@ -130,6 +130,14 @@ class CNS2ZSSTest(unittest.TestCase):
 
         self.assertIn('(A ^^ B)\n&& C', convert_cns_to_zss(source))
 
+    def test_map_assignment_becomes_map_and_value(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = MapSet\n'
+            'trigger1 = A\nmap(foo) = 5\n'
+        )
+
+        self.assertIn('MapSet{map: "foo"; value: 5}', convert_cns_to_zss(source))
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

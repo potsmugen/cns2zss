@@ -52,6 +52,8 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 **Controller parser:** each `[State ...]` becomes a dict with:
 - `type`, `triggeralls`, `triggers` (dict mapping num → list of conds), `params`, `param_comments`, `duplicates`, `persistent`, `ignorehitpause`, `comment`, `raw_block`
 
+**Map assignment:** `parse_map_assignment()` turns `map(name) = value` into `map: "name"; value: value`.
+
 **Variable assignment:** `parse_varset_assignment()` matches `var()`, `fvar()`, `sysvar()`, `sysfvar()` and maps to `v`, `fv`, `sysv`, `sysfv` in ZSS. `parentvaradd`/`parentvarset` use the same parsing and keep their parent names (`parentVarAdd`/`parentVarSet`).
 
 **ZSS generation:** `generate_zss_state(state)`:
@@ -165,6 +167,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- `map(name) = value` parameters are converted instead of silently dropped.
 - Terms containing `^^` are wrapped in parentheses; `A ^^ B && C` means `A ^^ (B && C)`.
 - Triggers after a gap in numbering are no longer converted (the engine ignores them); they become warnings.
 - Controllers with identical triggers are no longer merged into one block (an earlier controller's effect could no longer stop a later one).
