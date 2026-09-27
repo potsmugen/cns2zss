@@ -138,6 +138,17 @@ class CNS2ZSSTest(unittest.TestCase):
 
         self.assertIn('MapSet{map: "foo"; value: 5}', convert_cns_to_zss(source))
 
+    def test_first_type_wins_like_the_engine(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\n'
+            'type = ChangeState\ntrigger1 = A\nvalue = 0\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('Null{', output)
+        self.assertIn('# WARNING: duplicate parameter: type: ChangeState', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

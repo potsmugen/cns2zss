@@ -108,7 +108,7 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 
 ### Duplicate handling
 
-- **Duplicate controller parameters:** Keep first occurrence, add warning comment: `# WARNING: duplicate parameter: key: value`.
+- **Duplicate controller parameters** (including `type`, `persistent`, `ignorehitpause`): Keep first occurrence, like the engine; add warning comment: `# WARNING: duplicate parameter: key: value`.
 - **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
 
 ### `:=` assignment detection
@@ -167,6 +167,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Duplicate `type`/`persistent`/`ignorehitpause` keep the first value like the engine, instead of the last.
 - `map(name) = value` parameters are converted instead of silently dropped.
 - Terms containing `^^` are wrapped in parentheses; `A ^^ B && C` means `A ^^ (B && C)`.
 - Triggers after a gap in numbering are no longer converted (the engine ignores them); they become warnings.

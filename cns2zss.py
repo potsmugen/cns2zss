@@ -360,7 +360,15 @@ def parse_state_block(lines):
                 parameter = parameter_match.group(1).lower()
                 value = parameter_match.group(2).strip()
 
-                if parameter in ('persistent', 'ignorehitpause', 'type'):
+                # The engine keeps the first type/persistent/ignorehitpause.
+                if (
+                    parameter in ('persistent', 'ignorehitpause', 'type')
+                    and parameter in seen_params
+                ):
+                    current_controller['duplicates'].append((parameter, value))
+                elif parameter in ('persistent', 'ignorehitpause', 'type'):
+                    seen_params.add(parameter)
+
                     if parameter == 'persistent':
                         current_controller['persistent'] = value
                     elif parameter == 'ignorehitpause':
