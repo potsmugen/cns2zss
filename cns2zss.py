@@ -314,6 +314,10 @@ def parse_state_block(lines):
                     key = trigger_match.group(1).lower()
                     condition = trigger_match.group(2).strip()
 
+                    # The engine rejects the controller: "trigger1 cannot be empty".
+                    if not condition and not current_controller.get('rejected'):
+                        current_controller['rejected'] = f'{key} is empty'
+
                     if key == 'triggerall':
                         current_controller['triggeralls'].append(condition)
                     elif re.fullmatch(r'trigger0*[1-9]\d*', key):
@@ -664,10 +668,12 @@ def generate_zss_state(state):
         output.append('')
 
     for controller in state['controllers']:
-        # The engine rejects controllers without a type; keep them as comments.
-        if not controller['type']:
+        # Controllers the engine rejects are kept as comments.
+        reason = 'no type' if not controller['type'] else controller.get('rejected')
+
+        if reason:
             output.append(
-                '# WARNING: no type; the engine rejects this controller'
+                f'# WARNING: {reason}; the engine rejects this controller'
             )
             output.extend(
                 '# ' + raw_line.rstrip()

@@ -114,9 +114,9 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 - **Duplicate StateDef attributes:** Keep first occurrence, like the engine; warning after the header: `# WARNING: duplicate attribute: key: value`.
 - **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
 
-### Controllers without `type`
+### Controllers the engine rejects
 
-The engine rejects them. They aren't converted: the original block is output as comments under `# WARNING: no type; the engine rejects this controller`.
+No `type`, or an empty trigger (`trigger1 =`). They aren't converted: the original block is output as comments under `# WARNING: <reason>; the engine rejects this controller`.
 
 ### `:=` assignment detection
 
@@ -175,6 +175,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- An empty trigger (`trigger1 =`) no longer produces `if  {`; the controller is kept as comments with a warning.
 - Comments after the last line of a removed section (e.g. banners before the next state) are kept instead of removed with it.
 - `persistent` with triggerall + numbered triggers is on the inner `if`; on the outer one it was consumed when only the triggeralls passed.
 - Continuation lines (`|| ...`, `&& ...`) of nested `if` conditions are indented, matching the README example.

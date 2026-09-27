@@ -269,6 +269,20 @@ class CNS2ZSSTest(unittest.TestCase):
 
         self.assertIn('#===== States =====\n# Standing', output)
 
+    def test_empty_trigger_is_kept_as_comments(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\ntrigger1 =\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn(
+            '# WARNING: trigger1 is empty; the engine rejects this controller',
+            output,
+        )
+        self.assertIn('# trigger1 =', output)
+        self.assertNotIn('if ', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):
