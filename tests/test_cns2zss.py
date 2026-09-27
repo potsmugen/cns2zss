@@ -107,6 +107,21 @@ class CNS2ZSSTest(unittest.TestCase):
 
         self.assertEqual(output.count('if var(1) = 0 {'), 2)
 
+    def test_triggers_after_gap_become_warnings(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\n'
+            'trigger1 = A\ntrigger3 = B\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('if A {', output)
+        self.assertNotIn('|| B', output)
+        self.assertIn(
+            '# WARNING: trigger3 ignored by the engine (no trigger2): B',
+            output,
+        )
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

@@ -389,6 +389,25 @@ def parse_state_block(lines):
     if current_controller and current_controller.get('type'):
         state['controllers'].append(current_controller)
 
+    # CNS stops checking triggers at the first missing number after trigger1.
+    for controller in state['controllers']:
+        triggers = controller['triggers']
+        controller['ignored_triggers'] = []
+
+        if 1 not in triggers:
+            continue
+
+        gap = 1
+        while gap in triggers:
+            gap += 1
+
+        for number in sorted(n for n in triggers if n > gap):
+            for condition in triggers.pop(number):
+                controller['ignored_triggers'].append(
+                    f'# WARNING: trigger{number} ignored by the engine '
+                    f'(no trigger{gap}): {condition}'
+                )
+
     # ZSS crashes on persistent in negative states and +1, so drop it there.
     if state['no'] == '+1' or (isinstance(state['no'], int) and state['no'] < 0):
         for controller in state['controllers']:
@@ -572,6 +591,8 @@ def generate_zss_state(state):
 
             if comment:
                 body_lines.append(comment.strip())
+
+        body_lines.extend(controller.get('ignored_triggers', []))
 
         raw_block = controller.get('raw_block', [])
 

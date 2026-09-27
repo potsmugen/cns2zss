@@ -165,6 +165,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Triggers after a gap in numbering are no longer converted (the engine ignores them); they become warnings.
 - Controllers with identical triggers are no longer merged into one block (an earlier controller's effect could no longer stop a later one).
 - `parentvaradd`/`parentvarset` keep their names instead of becoming `varAdd`/`varSet`.
 - `:=` now detected in parameters as well as triggers (fixed).
@@ -216,6 +217,7 @@ Rules:
 - Within a single trigger number (e.g. two `trigger1 =` lines) → joined with `&&`.
 - Across different trigger numbers → joined with `||`.
 - Trigger lines may appear OUT OF ORDER in the CNS source (e.g. a `trigger4` line can appear between two `trigger1` lines). MUGEN groups by trigger number, not by source order, so the converter MUST group by integer key and ignore source position.
+- Trigger numbers after the first gap (e.g. `trigger3` with no `trigger2`) are not converted; each becomes a `# WARNING: ... ignored by the engine` comment before the controller.
 - Duplicate same-number triggers (e.g. `trigger4 = A` then `trigger4 = B`) are preserved as `A && B` even if logically impossible — no deduplication, no semantic cleanup.
 - Always-true `1`:
   - Every trigger is `1` → no `if`.
