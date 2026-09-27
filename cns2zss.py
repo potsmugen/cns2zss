@@ -934,6 +934,10 @@ def convert_cns_to_zss(content: str) -> str:
 
                 end += 1
 
+            # Like states, leave trailing comments for whatever follows.
+            while end > index + 1 and is_comment_or_blank(lines[end - 1]):
+                end -= 1
+
             index = end
             continue
 

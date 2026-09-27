@@ -65,7 +65,7 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 - `persistent` → `persistent(N)` prefix, except in negative states and `+1` (stripped; see below). With both triggerall and numbered triggers it goes on the inner `if`; `ignorehitpause` stays on the outer one.
 - Formatting: one‑line vs multi‑line based on `MAX_PARAMS_ON_LINE` and `MAX_ONE_LINE_LEN`
 
-**Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It skips duplicate state definitions by numeric state number, except literal `+1` remains distinct from `1`. Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`. If the file contains no `[Statedef]`, the sentinel is returned and the file is left untouched; section stripping only applies once at least one `[Statedef]` exists.
+**Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It skips duplicate state definitions by numeric state number, except literal `+1` remains distinct from `1`. Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`; their trailing comments are kept for what follows, like a state's. If the file contains no `[Statedef]`, the sentinel is returned and the file is left untouched; section stripping only applies once at least one `[Statedef]` exists.
 
 ## Generation philosophy
 
@@ -175,6 +175,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Comments after the last line of a removed section (e.g. banners before the next state) are kept instead of removed with it.
 - `persistent` with triggerall + numbered triggers is on the inner `if`; on the outer one it was consumed when only the triggeralls passed.
 - Continuation lines (`|| ...`, `&& ...`) of nested `if` conditions are indented, matching the README example.
 - Controllers without `type` are kept as commented-out CNS with a warning instead of vanishing.

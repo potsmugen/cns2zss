@@ -258,6 +258,17 @@ class CNS2ZSSTest(unittest.TestCase):
             convert_cns_to_zss(source),
         )
 
+    def test_comments_after_removed_section_are_kept(self):
+        source = (
+            '[Data]\nlife = 1000\n\n'
+            ';===== States =====\n; Standing\n'
+            '[Statedef 0]\ntype = S\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('#===== States =====\n# Standing', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):
