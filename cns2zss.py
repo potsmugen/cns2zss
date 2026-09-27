@@ -786,7 +786,9 @@ def generate_zss_state(state):
             output.append('}')
         else:
             output.append(f'{prefix}if {outer} {{')
-            output.append(f'\tif {inner} {{')
+            # Indent the nested condition's continuation lines with it.
+            nested = inner.replace('\n', '\n\t')
+            output.append(f'\tif {nested} {{')
             output.extend(indent_line(line, 2) for line in body_lines)
             output.append('\t}')
             output.append('}')

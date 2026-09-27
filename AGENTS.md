@@ -137,7 +137,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - **Blank lines:** Single blank lines preserved; multiple collapsed to one.
 - **State header:** `[StateDef N;` on its own line, attributes indented, `]` on its own line. If no attributes, `[StateDef N]` (no semicolon).
 - **Pure comments:** Immediately after `[StateDef ...]` block, no blank line; blank line added if controllers follow.
-- **Controllers:** Each block separated by a blank line; body indented one level per enclosing `if` / modifier block.
+- **Controllers:** Each block separated by a blank line; body indented one level per enclosing `if` / modifier block. Continuation lines of a nested `if` condition are indented with it.
 - **Encoding:** Output is always written as UTF‑8 (Ikemen is encoding‑agnostic on read; decoding→re‑encoding is lossless).
 
 ## GUI behavior
@@ -174,6 +174,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Continuation lines (`|| ...`, `&& ...`) of nested `if` conditions are indented, matching the README example.
 - Controllers without `type` are kept as commented-out CNS with a warning instead of vanishing.
 - Duplicate StateDef attributes keep the first value like the engine, instead of the last.
 - `trigger =` and `trigger0 =` are no longer converted (as trigger1 / an OR term); the engine ignores them, so they become warnings.

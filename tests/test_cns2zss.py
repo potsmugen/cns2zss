@@ -236,6 +236,17 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertIn('# value = 1', output)
         self.assertNotIn('if A', output)
 
+    def test_nested_condition_continuation_is_indented(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\n'
+            'triggerall = Ctrl\ntrigger1 = A\ntrigger2 = B\n'
+        )
+
+        self.assertIn(
+            'if Ctrl {\n\tif A\n\t|| B {\n\t\tNull{}',
+            convert_cns_to_zss(source),
+        )
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):
