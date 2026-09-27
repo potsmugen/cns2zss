@@ -389,6 +389,28 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertIn('# Now jump\n# b\nif B {\n\tNull{}\n\t# end of b\n}', output)
         self.assertIn('# Next state\n\n#=====', output)
 
+    def test_unclosed_state_header_is_ignored_with_warning(self):
+        source = (
+            '[Statedef 200]\n'
+            '[State 200, a\ntype = Null\ntrigger1 = A\n\n'
+            '[State 200, b]\ntype = Null\ntrigger1 = B\n'
+        )
+        warnings = []
+
+        output = convert_cns_to_zss(source, warnings=warnings)
+
+        self.assertIn(
+            '# WARNING: unclosed [State] header; the engine ignores this controller\n'
+            '# [State 200, a\n# type = Null',
+            output,
+        )
+        self.assertNotIn('if A', output)
+        self.assertIn('if B {', output)
+        self.assertEqual(len(warnings), 1)
+        self.assertNotIn(
+            'unclosed', convert_cns_to_zss(source, keep_warnings=False)
+        )
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

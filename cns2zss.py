@@ -276,8 +276,9 @@ def parse_state_block(lines):
             state['ignored_tail'] = carried + lines[index:]
             break
 
+        # An unclosed header (`[State -2, x`) is still parsed, then flagged.
         controller_match = re.match(
-            r'\[\s*State\s+(.*?)\]',
+            r'\[\s*State\s+(.*?)(?:\]|$)',
             stripped,
             re.IGNORECASE,
         )
@@ -337,6 +338,7 @@ def parse_state_block(lines):
                 'ignorehitpause': None,
                 'comment': controller_comment,
                 'comments_before': header_comments,
+                'unclosed': not stripped.endswith(']'),
                 'pure_comments': (
                     ['#' + comment.rstrip()] if comment and comment.strip() else []
                 ),
@@ -772,6 +774,25 @@ def generate_zss_state(state, keep_warnings=True, warnings=None):
         output.append('')
 
     for controller in state['controllers']:
+        # Ikemen skips a controller whose header lacks `]` ("State header not closed").
+        if controller['unclosed']:
+            log('unclosed [State] header; the engine ignores this controller', controller)
+
+            if keep_warnings or has_assignment(controller['raw_block']):
+                output.extend(controller['comments_before'])
+                output.append(
+                    '# WARNING: unclosed [State] header; '
+                    'the engine ignores this controller'
+                )
+                output.extend(
+                    '# ' + raw_line.rstrip()
+                    for raw_line in controller['raw_block']
+                    if raw_line.strip()
+                )
+                output.append('')
+
+            continue
+
         # Controllers the engine rejects are kept as comments.
         reason = 'no type' if not controller['type'] else controller.get('rejected')
 

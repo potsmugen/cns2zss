@@ -19,6 +19,7 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 - Same trigger number = AND; different numbers = OR; `triggerall` is ANDed with everything.
 - Trigger numbers must be contiguous from 1. Checking stops at the first gap: `trigger4` without `trigger3` is ignored (Ikemen warns).
 - `trigger1` is mandatory, even with `triggerall` (Ikemen: "Missing trigger1").
+- A header without the closing `]` (`[State -2, x`) makes Ikemen skip that controller ("State header not closed"); it resumes at the next proper header.
 - Controller headers must start with exactly `[State ` (space). `[State]`, `[State,x]`, `[ State 200]` end the state: the engine ignores everything after them until the next `[Statedef]`.
 - A trigger number whose value is constant `1` is always true; constant `0` is never true.
 - `persistent`: default 1; 0 = once per state entry; N = every Nth time the full condition (triggeralls + triggers) passes. Ignored in negative states and `+1` (Ikemen stores `+1` as -10).
@@ -129,6 +130,10 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 - **Duplicate StateDef attributes:** Keep first occurrence, like the engine; warning after the header: `# WARNING: duplicate attribute: key: value`.
 - **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. Only the state itself is skipped (`find_state_end()`, same bounds as a normal state); following sections and trailing comments are processed normally. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
 
+### Unclosed `[State]` headers
+
+Parsed like a normal controller, then flagged `unclosed`: output as comments under `# WARNING: unclosed [State] header; the engine ignores this controller` (removable with `keep_warnings=False`). Found in a real character (CVS Gouki, `[State -2, Blocking-12`).
+
 ### Invalid `[State]` headers
 
 From the invalid header to the end of the state, lines go to `state['ignored_tail']` and are output as comments under `# WARNING: invalid [State] header; the engine ignores the rest of this state`.
@@ -194,6 +199,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Controllers with an unclosed `[State` header were silently dropped; now kept as comments with a warning, like the engine ignores them.
 - Comments above a `[State]` header go above the controller's label, not inside its `if` (e.g. KFM's banners in `kfm.cmd`).
 - Comments before a `[State]` header went to the previous controller, and a controller's closing comments left the state; a blank line now decides which side they belong to.
 - Warnings are printed to the GUI log and CLI output, whether kept in the file or removed.
