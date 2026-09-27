@@ -295,6 +295,26 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertIn('# next section', output)
         self.assertIn('# Removed [Data] section', output)
 
+    def test_invalid_state_header_ends_the_state(self):
+        source = (
+            '[Statedef 200]\n'
+            '[State 200, a]\ntype = Null\ntrigger1 = A\n'
+            '[State]\ntype = PosAdd\ntrigger1 = B\n'
+            '[State 200, c]\ntype = Null\ntrigger1 = C\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('if A {', output)
+        self.assertIn(
+            '# WARNING: invalid [State] header; '
+            'the engine ignores the rest of this state',
+            output,
+        )
+        self.assertIn('# [State 200, c]', output)
+        self.assertNotIn('if B', output)
+        self.assertNotIn('if C', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

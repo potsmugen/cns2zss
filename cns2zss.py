@@ -212,6 +212,7 @@ def parse_state_block(lines):
         'attr_comments': {},
         'controllers': [],
         'pure_comments': [],
+        'ignored_tail': [],
     }
 
     current_controller = None
@@ -240,6 +241,16 @@ def parse_state_block(lines):
 
             index += 1
             continue
+
+        # The engine needs exactly `[State ` (e.g. not `[State]` or `[State,x]`);
+        # any other header ends the state, so the rest is never read.
+        if is_controller_header(stripped) and stripped.lower()[1:7] != 'state ':
+            if current_controller:
+                state['controllers'].append(current_controller)
+                current_controller = None
+
+            state['ignored_tail'] = lines[index:]
+            break
 
         controller_match = re.match(
             r'\[\s*State\s+(.*?)\]',
@@ -802,6 +813,16 @@ def generate_zss_state(state):
             output.append('\t}')
             output.append('}')
 
+        output.append('')
+
+    if state['ignored_tail']:
+        output.append(
+            '# WARNING: invalid [State] header; '
+            'the engine ignores the rest of this state'
+        )
+        output.extend(
+            '# ' + line.rstrip() for line in state['ignored_tail'] if line.strip()
+        )
         output.append('')
 
     return '\n'.join(output)

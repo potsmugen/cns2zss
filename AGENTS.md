@@ -19,6 +19,7 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 - Same trigger number = AND; different numbers = OR; `triggerall` is ANDed with everything.
 - Trigger numbers must be contiguous from 1. Checking stops at the first gap: `trigger4` without `trigger3` is ignored (Ikemen warns).
 - `trigger1` is mandatory, even with `triggerall` (Ikemen: "Missing trigger1").
+- Controller headers must start with exactly `[State ` (space). `[State]`, `[State,x]`, `[ State 200]` end the state: the engine ignores everything after them until the next `[Statedef]`.
 - A trigger number whose value is constant `1` is always true; constant `0` is never true.
 - `persistent`: default 1; 0 = once per state entry; N = every Nth time the full condition (triggeralls + triggers) passes. Ignored in negative states and `+1` (Ikemen stores `+1` as -10).
 - `ignorehitpause`: default 0. `persistent` and `ignorehitpause` can't be expressions.
@@ -114,6 +115,10 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 - **Duplicate StateDef attributes:** Keep first occurrence, like the engine; warning after the header: `# WARNING: duplicate attribute: key: value`.
 - **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. Only the state itself is skipped (`find_state_end()`, same bounds as a normal state); following sections and trailing comments are processed normally. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
 
+### Invalid `[State]` headers
+
+From the invalid header to the end of the state, lines go to `state['ignored_tail']` and are output as comments under `# WARNING: invalid [State] header; the engine ignores the rest of this state`.
+
 ### Controllers the engine rejects
 
 No `type`, or an empty trigger (`trigger1 =`). They aren't converted: the original block is output as comments under `# WARNING: <reason>; the engine rejects this controller`.
@@ -175,6 +180,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Invalid `[State]` headers no longer silently drop one controller while converting the ones after it; the rest of the state is kept as comments with a warning, like the engine ignores it.
 - Removing a duplicate state no longer swallows the sections and comments after it.
 - An empty trigger (`trigger1 =`) no longer produces `if  {`; the controller is kept as comments with a warning.
 - Comments after the last line of a removed section (e.g. banners before the next state) are kept instead of removed with it.
