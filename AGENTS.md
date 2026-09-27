@@ -94,6 +94,7 @@ Constants in `cns2zss.py`:
 - **Standalone comments:** Lines starting with `;` (after spaces) → `#` and preserved.
 - **Pure comments inside states:** Collected into `state['pure_comments']` and output after the `[StateDef ...]` block.
 - **Inline comments:** Kept as `# comment` on the same line in ZSS.
+- **Header and trigger comments:** `[Statedef]` header comments join the state's pure comments; `[State]` header comments and trigger-line comments (as `# trigger1: text`) go above the controller body, since conditions are rewritten.
 - **Empty `;` lines:** Skipped (no comment text → not emitted).
 
 ### State block collection
@@ -168,6 +169,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Comments on `[Statedef]` headers, `[State]` headers and trigger lines are kept instead of dropped.
 - `[Statedef 200, Punch]` and `[Statedef const(Name)]` are converted instead of removed as unknown sections.
 - Controllers without `trigger1` get a warning (the engine rejects them).
 - `word (` → `word(` tidying no longer touches string literals (it renamed commands like `"a (b)"`).

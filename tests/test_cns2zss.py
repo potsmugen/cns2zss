@@ -184,6 +184,20 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertIn('[StateDef const(StateJump);', output)
         self.assertNotIn('Removed', output)
 
+    def test_header_and_trigger_comments_are_kept(self):
+        source = (
+            '[Statedef 200] ; Punch state\n'
+            '[State 200, x] ; header note\n'
+            'type = Null\n'
+            'trigger1 = A ; only when A\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('#Punch state', output)
+        self.assertIn('# header note', output)
+        self.assertIn('# trigger1: only when A', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

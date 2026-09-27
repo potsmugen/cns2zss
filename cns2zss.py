@@ -237,6 +237,10 @@ def parse_state_block(lines):
         if statedef_match:
             state['no'] = parse_state_number(statedef_match)
             state['label'] = statedef_match.group(2)
+
+            if comment and comment.strip():
+                state['pure_comments'].append('#' + comment.strip())
+
             index += 1
             continue
 
@@ -285,7 +289,9 @@ def parse_state_block(lines):
                 'persistent': None,
                 'ignorehitpause': None,
                 'comment': controller_comment,
-                'pure_comments': [],
+                'pure_comments': (
+                    ['#' + comment.rstrip()] if comment and comment.strip() else []
+                ),
                 'raw_block': raw_block,
             }
 
@@ -315,6 +321,12 @@ def parse_state_block(lines):
                     else:
                         number = int(key[7:]) if len(key) > 7 else 1
                         current_controller['triggers'][number].append(condition)
+
+                    # Conditions are rewritten, so keep their comments above the body.
+                    if line_comment:
+                        current_controller['pure_comments'].append(
+                            f'# {key}:{line_comment[1:]}'
+                        )
 
                     continue
 
