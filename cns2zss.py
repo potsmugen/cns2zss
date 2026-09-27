@@ -23,15 +23,25 @@ MAX_PARAMS_ON_LINE = 3
 # If one‑line controller body exceeds this length, split into multiple lines
 MAX_ONE_LINE_LEN = 100
 
+# Like Ikemen, only the first token counts: `[Statedef 200, Punch]` is state 200.
 STATEDEF_RE = re.compile(
-    r'^\s*\[\s*Statedef\s+(\+1|-?\d+)\s*\]',
+    r'^\s*\[\s*Statedef\s+'
+    r'(\+1|-?\d+|const\s*\(\s*[^)]*?\s*\))'
+    r'(?=[\s,\]])[\s,]*([^\]]*?)\s*\]',
     re.IGNORECASE,
 )
 
 
 def parse_state_number(statedef_match):
     number = statedef_match.group(1)
-    return number if number == '+1' else int(number)
+
+    if number == '+1':
+        return number
+
+    if number.lower().startswith('const'):
+        return re.sub(r'\s+', '', number)
+
+    return int(number)
 
 
 # ----------------------------------------------------------------------
@@ -226,6 +236,7 @@ def parse_state_block(lines):
         statedef_match = STATEDEF_RE.match(stripped)
         if statedef_match:
             state['no'] = parse_state_number(statedef_match)
+            state['label'] = statedef_match.group(2)
             index += 1
             continue
 
@@ -598,7 +609,8 @@ def generate_zss_state(state):
     """Generate ZSS for one parsed state."""
     output = [
         '#============================================================',
-        f"# State {state['no']}",
+        f"# State {state['no']}"
+        + (f", {state['label']}" if state.get('label') else ''),
         '#============================================================',
         '',
     ]

@@ -43,7 +43,8 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 **Entry point:** `convert_cns_to_zss(content: str) -> str`. Returns the sentinel string `'(NO_STATEDDEF)'` if the input contains no `[Statedef]` block (caller should skip writing and log).
 
 **State parser:** `parse_state_block(lines)` parses a `[Statedef ...]` block into:
-- `no`: numeric state number (int), except literal `+1` is retained as a string to distinguish it from `1`
+- `no`: numeric state number (int), except literal `+1` and `const(Name)` are kept as strings
+- `label`: text after the number (`[Statedef 200, Punch]` → `Punch`), shown in the state banner
 - `attributes`: dict of state-level keys (insertion order preserved)
 - `attr_comments`: dict of inline comments for attributes
 - `controllers`: list of parsed controller dicts
@@ -167,6 +168,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- `[Statedef 200, Punch]` and `[Statedef const(Name)]` are converted instead of removed as unknown sections.
 - Controllers without `trigger1` get a warning (the engine rejects them).
 - `word (` → `word(` tidying no longer touches string literals (it renamed commands like `"a (b)"`).
 - Duplicate `type`/`persistent`/`ignorehitpause` keep the first value like the engine, instead of the last.

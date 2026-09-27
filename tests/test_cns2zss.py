@@ -171,6 +171,19 @@ class CNS2ZSSTest(unittest.TestCase):
             convert_cns_to_zss(source),
         )
 
+    def test_statedef_with_label_or_constant_is_kept(self):
+        source = (
+            '[Statedef 200, Punch]\ntype = S\n'
+            '[Statedef const(StateJump)]\ntype = A\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('# State 200, Punch', output)
+        self.assertIn('[StateDef 200;', output)
+        self.assertIn('[StateDef const(StateJump);', output)
+        self.assertNotIn('Removed', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):
