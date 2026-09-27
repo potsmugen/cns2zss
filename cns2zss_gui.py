@@ -120,6 +120,13 @@ class CNS2ZSSApp:
             "Remove"
         ).pack()
 
+        # Clear Log goes under the log; packed first so resizing can't hide it.
+        tk.Button(
+            root,
+            text="Clear Log",
+            command=self.clear_log
+        ).pack(side='bottom', pady=2)
+
         # Log area
         tk.Label(
             root,
@@ -138,12 +145,12 @@ class CNS2ZSSApp:
             pady=2
         )
 
-        # Clear Log button under the log window
-        tk.Button(
-            root,
-            text="Clear Log",
-            command=self.clear_log
-        ).pack(pady=2)
+        # Don't let the window shrink past the buttons; only the log shrinks.
+        root.update_idletasks()
+        root.minsize(
+            root.winfo_reqwidth(),
+            root.winfo_reqheight() - self.log_text.winfo_reqheight() + 60
+        )
 
     def add_files(self):
         paths = filedialog.askopenfilenames(
