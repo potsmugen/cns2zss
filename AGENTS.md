@@ -112,7 +112,7 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 
 - **Duplicate controller parameters** (including `type`, `persistent`, `ignorehitpause`): Keep first occurrence, like the engine; add warning comment: `# WARNING: duplicate parameter: key: value`.
 - **Duplicate StateDef attributes:** Keep first occurrence, like the engine; warning after the header: `# WARNING: duplicate attribute: key: value`.
-- **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
+- **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. Only the state itself is skipped (`find_state_end()`, same bounds as a normal state); following sections and trailing comments are processed normally. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
 
 ### Controllers the engine rejects
 
@@ -175,6 +175,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Removing a duplicate state no longer swallows the sections and comments after it.
 - An empty trigger (`trigger1 =`) no longer produces `if  {`; the controller is kept as comments with a warning.
 - Comments after the last line of a removed section (e.g. banners before the next state) are kept instead of removed with it.
 - `persistent` with triggerall + numbered triggers is on the inner `if`; on the outer one it was consumed when only the triggeralls passed.

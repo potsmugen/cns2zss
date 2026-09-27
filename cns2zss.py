@@ -811,6 +811,34 @@ def generate_zss_state(state):
 # Main conversion
 # ----------------------------------------------------------------------
 
+def find_state_end(lines, index):
+    """Return the index after the state starting at lines[index].
+
+    A state ends at the next [Statedef] or non-state section. Trailing
+    comments and blank lines are left for whatever follows.
+    """
+    end = index + 1
+
+    while end < len(lines):
+        next_stripped = strip_comment_for_parsing(lines[end])
+
+        if next_stripped and (
+            STATEDEF_RE.match(next_stripped)
+            or (
+                next_stripped.startswith('[')
+                and not is_controller_header(next_stripped)
+            )
+        ):
+            break
+
+        end += 1
+
+    while end > index + 1 and is_comment_or_blank(lines[end - 1]):
+        end -= 1
+
+    return end
+
+
 def convert_cns_to_zss(content: str) -> str:
     """Convert complete CNS content to ZSS."""
     if not any(
@@ -858,16 +886,8 @@ def convert_cns_to_zss(content: str) -> str:
                     f'# WARNING: Duplicate state {state_number} removed'
                 )
 
-                index += 1
-
-                while index < len(lines):
-                    next_stripped = strip_comment_for_parsing(lines[index])
-
-                    if STATEDEF_RE.match(next_stripped):
-                        break
-
-                    index += 1
-
+                # Skip only the state itself; later sections and comments stay.
+                index = find_state_end(lines, index)
                 continue
 
             seen_states.add(state_number)
@@ -880,45 +900,8 @@ def convert_cns_to_zss(content: str) -> str:
                 output.append('')
                 pending = []
 
-            state_lines = [raw_line]
-            end = index + 1
-
-            while end < len(lines):
-                next_line = lines[end]
-                next_code, _ = split_code_and_comment(next_line)
-                next_stripped = strip_comment_for_parsing(next_line)
-
-                if not next_code.strip():
-                    state_lines.append(next_line)
-                    end += 1
-                    continue
-
-                if STATEDEF_RE.match(next_stripped):
-                    break
-
-                if (
-                    next_stripped.startswith('[')
-                    and not is_controller_header(next_stripped)
-                ):
-                    break
-
-                state_lines.append(next_line)
-                end += 1
-
-            # Do not attach separator comments before the next section to
-            # the preceding state. Leave them for the main loop so they are
-            # emitted before the next state or section.
-            body_end = len(state_lines)
-
-            while body_end > 1 and is_comment_or_blank(
-                state_lines[body_end - 1]
-            ):
-                body_end -= 1
-
-            state_lines = state_lines[:body_end]
-            next_index = index + body_end
-
-            state = parse_state_block(state_lines)
+            next_index = find_state_end(lines, index)
+            state = parse_state_block(lines[index:next_index])
             output.append(generate_zss_state(state))
             index = next_index
             continue

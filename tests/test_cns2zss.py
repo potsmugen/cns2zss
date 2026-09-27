@@ -283,6 +283,18 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertIn('# trigger1 =', output)
         self.assertNotIn('if ', output)
 
+    def test_duplicate_state_removal_stops_at_the_state(self):
+        source = (
+            '[Statedef 1]\n[Statedef 1]\ntype = S\n'
+            '; next section\n[Data]\nlife = 1\n[Statedef 2]\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('# WARNING: Duplicate state 1 removed', output)
+        self.assertIn('# next section', output)
+        self.assertIn('# Removed [Data] section', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):
