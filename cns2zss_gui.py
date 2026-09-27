@@ -108,12 +108,16 @@ class CNS2ZSSApp:
         )
         self.cancel_btn.pack(side='left', padx=5)
 
-        # Off drops warnings and code the engine ignores; `:=` warnings stay.
-        self.keep_warnings = tk.BooleanVar(value=True)
-        tk.Checkbutton(
-            root,
-            text="Keep warnings as commented code",
-            variable=self.keep_warnings
+        # "Remove" drops warnings and code the engine ignores; `:=` warnings stay.
+        option_frame = tk.Frame(root)
+        option_frame.pack()
+        tk.Label(option_frame, text="Incorrect code handling:").pack()
+        self.incorrect_code = tk.StringVar(value="Comment out")
+        tk.OptionMenu(
+            option_frame,
+            self.incorrect_code,
+            "Comment out",
+            "Remove"
         ).pack()
 
         # Log area
@@ -290,7 +294,7 @@ class CNS2ZSSApp:
         # Run the heavy work off the UI thread
         self.worker_thread = threading.Thread(
             target=self._convert_worker,
-            args=(approved, self.keep_warnings.get()),
+            args=(approved, self.incorrect_code.get() == "Comment out"),
             daemon=True
         )
         self.worker_thread.start()

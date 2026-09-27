@@ -41,7 +41,7 @@ By default, code the engine ignores (invalid triggers, duplicates, etc.) is kept
 python cns2zss_gui.py
 ```
 
-Launches a GUI for the script. The "Keep warnings" checkbox does the same as `--no-warnings` when unticked.
+Launches a GUI for the script. Setting "Incorrect code" to "Remove" does the same as `--no-warnings`.
 
 ## Example
 

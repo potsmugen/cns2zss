@@ -71,7 +71,7 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 
 ## Keep warnings option
 
-`keep_warnings` (GUI checkbox, CLI `--no-warnings`, default on). Off drops the converter's warnings and the code the engine ignores anyway: removed-section notes, duplicate state/attribute/parameter warnings, ignored triggers (gap, invalid name), invalid `[State]` tails.
+`keep_warnings` (default on; GUI "Incorrect code" dropdown set to "Remove" and CLI `--no-warnings` turn it off). Off drops the converter's warnings and the code the engine ignores anyway: removed-section notes, duplicate state/attribute/parameter warnings, ignored triggers (gap, invalid name), invalid `[State]` tails.
 
 Rule: anything that needs manual adjustment is never removed:
 - `:=` warnings and original blocks. An invalid `[State]` tail containing `:=` is kept whole.
