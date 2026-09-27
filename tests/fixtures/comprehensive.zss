@@ -57,17 +57,20 @@ varSet{
 	v: 1; # Variable comment
 	value: 5;
 }
+
 # ParentVarAdd
 parentVarAdd{
 	v: 2;
 	value: 1;
 	# WARNING: duplicate parameter: value: 3
 }
+
 # DuplicateParameter
 DisplayToClipboard{
 	text: "first";
 	# WARNING: duplicate parameter: text: "second"
 }
+
 # AssignmentInParameter
 # WARNING: assignment operator `:=` found in expression. Manual adjustment required.
 # Original CNS block:
@@ -91,15 +94,18 @@ DisplayToClipboard{text: "assignment %d"; params: var(0) := 1}
 	physics: N;
 ]
 
+# ModifyExplod
 ignorehitpause {
-	# ModifyExplod
 	ModifyExplod{
 		ignorehitpause: 1;
 		id: 1;
 		anim: 2;
 		pos: 0, 0;
 	}
-	# AfterImage
+}
+
+# AfterImage
+ignorehitpause {
 	AfterImage{
 		ignorehitpause: 1;
 		time: 2;
@@ -118,6 +124,7 @@ if (A
 
 # EmptyController
 Null{}
+
 # AngleComment
 # Comment containing <angle brackets>
 Null{}

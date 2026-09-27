@@ -96,6 +96,17 @@ class CNS2ZSSTest(unittest.TestCase):
                 self.assertIn(expected, output)
                 self.assertNotIn('1\n&&', output)
 
+    def test_controllers_with_identical_triggers_are_not_merged(self):
+        source = (
+            '[Statedef 200]\n'
+            '[State 200, set]\ntype = VarSet\ntrigger1 = var(1) = 0\nvar(1) = 1\n'
+            '[State 200, add]\ntype = VarAdd\ntrigger1 = var(1) = 0\nvar(2) = 1\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertEqual(output.count('if var(1) = 0 {'), 2)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

@@ -10,6 +10,34 @@ Read the `.py` files. This doc is invariants and landmines, not a transcript. Af
 2. **Mechanical conversion only.** No semantic analysis, no optimization, no control-flow restructuring (e.g., no `else` conversion). Output is a direct translation, not a rewrite.
 3. **Real files beat theory.** KFM and user-provided files are the ground truth.
 
+## Engine behavior (verified)
+
+Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs in `working/` (git-ignored). Check claims against these, not memory.
+
+**CNS**
+- Controllers run top to bottom; each checks its triggers when reached, so earlier controllers' effects are visible to later triggers.
+- Same trigger number = AND; different numbers = OR; `triggerall` is ANDed with everything.
+- Trigger numbers must be contiguous from 1. Checking stops at the first gap: `trigger4` without `trigger3` is ignored (Ikemen warns).
+- `trigger1` is mandatory, even with `triggerall` (Ikemen: "Missing trigger1").
+- A trigger number whose value is constant `1` is always true; constant `0` is never true.
+- `persistent`: default 1; 0 = once per state entry; N = every Nth activation. Ignored in negative states and `+1` (Ikemen stores `+1` as -10).
+- `ignorehitpause`: default 0. `persistent` and `ignorehitpause` can't be expressions.
+- Duplicate parameters, including `type`/`persistent`/`ignorehitpause`: first wins, later ones are ignored. Repeated triggers aren't duplicates (that's AND).
+- `var()`, `fvar()`, `sysvar()`, `sysfvar()` and `map()` are valid parameter names. VarSet also takes `v`/`fv`/`sysv`/`sysfv` + `value`; one variable per controller.
+- Duplicate `[Statedef N]` in one file: later one skipped with a warning.
+- `;` starts a comment. Case-insensitive except command names.
+- Operator precedence, high to low: `! ~ -` · `**` · `* / %` · `+ -` · `> >= < <=` · `= !=` intervals · `:=` · `&` · `^` · `|` · `&&` · `^^` · `||`.
+
+**ZSS**
+- Same operators and precedence as CNS, but not the same evaluation:
+  - In ZSS, `&&`/`||` short-circuit. Inside a single CNS expression they don't: both sides are always evaluated (`c.block != nil` path in `expBoolAnd`/`expBoolOr`). Separate CNS trigger lines do short-circuit.
+  - Only matters for side effects (`:=`) and redirects to missing players, e.g. `NumHelper(1) && Helper(1), Var(1)`.
+- ZSS is compiled strictly (`ignoreMostErrors = false`). Sloppy syntax that CNS tolerates (e.g. `var (1)`) can fail in ZSS.
+- `if cond { ... }` evaluates `cond` once for the whole block.
+- `persistent(N)` in a negative state or `+1` is a compile error.
+- Duplicate `[StateDef N]` in one file is a compile error.
+- `varSet`/`varAdd`/`parentVarSet`/`parentVarAdd` still compile, though the wiki calls them obsolete in favor of `:=`.
+
 ## Architecture
 
 **Entry point:** `convert_cns_to_zss(content: str) -> str`. Returns the sentinel string `'(NO_STATEDDEF)'` if the input contains no `[Statedef]` block (caller should skip writing and log).
@@ -29,7 +57,7 @@ Read the `.py` files. This doc is invariants and landmines, not a transcript. Af
 **ZSS generation:** `generate_zss_state(state)`:
 - Attributes → `[StateDef N; ... ]`
 - Pure comments → after the state block
-- Controller merging: consecutive controllers with identical triggers (triggeralls + numbered triggers + persistent + ignorehitpause) are merged into one block
+- Each controller gets its own block; controllers are never merged (see Landmines)
 - Conditions: triggerall → outer `if`; numbered triggers → inner `if` with `&&`/`||` chains
 - `persistent` → `persistent(N)` prefix, except in negative states and `+1` (stripped; see below)
 - Formatting: one‑line vs multi‑line based on `MAX_PARAMS_ON_LINE` and `MAX_ONE_LINE_LEN`
@@ -76,16 +104,6 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 - The inner `wrap()` helper adds parentheses around terms containing `&&` or `||` (once — no double wrapping).
 - `strip_outer_parens()` removes redundant outer parentheses.
 
-### Controller merging
-
-Merged if **identical**:
-- `triggerall` conditions (sorted, cleaned)
-- Numbered trigger conditions (sorted by number, each condition sorted)
-- `persistent` value
-- `ignorehitpause` value
-
-When merged, if all controllers share the same `comment` (label), it is output once before the merged block.
-
 ### Duplicate handling
 
 - **Duplicate controller parameters:** Keep first occurrence, add warning comment: `# WARNING: duplicate parameter: key: value`.
@@ -97,7 +115,7 @@ Scans every line of every controller (triggers and parameters). If `:=` found, a
 
 ### persistent stripping
 
-Ikemen crashes on `persistent` in negative states and `[Statedef +1]`. At the end of `parse_state_block`, if `no` is `'+1'` or a negative int, every controller's `persistent` (and its inline comment) is dropped. Doing it at parse time means merging also ignores it.
+Ikemen crashes on `persistent` in negative states and `[Statedef +1]`. At the end of `parse_state_block`, if `no` is `'+1'` or a negative int, every controller's `persistent` (and its inline comment) is dropped.
 
 ### ignorehitpause insertion
 
@@ -131,6 +149,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Landmines (do not reintroduce)
 
+- **Don't merge controllers into one block.** CNS checks each controller's triggers when it runs; a merged ZSS block checks once, so an earlier controller's effect (vars, position, anim…) can't stop a later one.
 - **Don't add `else` conversion.** Requires Boolean algebra, out of scope.
 - **Don't treat `+1` as duplicate of `1`.** `+1` stays a string, so they are distinct.
 - **Don't emit `persistent` in negative states or `+1`.** Ikemen crashes.
@@ -146,6 +165,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Controllers with identical triggers are no longer merged into one block (an earlier controller's effect could no longer stop a later one).
 - `parentvaradd`/`parentvarset` keep their names instead of becoming `varAdd`/`varSet`.
 - `:=` now detected in parameters as well as triggers (fixed).
 - No more double parentheses around OR‑chain terms (fixed).

@@ -498,20 +498,6 @@ def get_conditions(controller):
     return triggeralls, numbered
 
 
-def get_trigger_key(controller):
-    """Create a key for merging controllers."""
-    triggeralls, numbered = get_conditions(controller)
-    triggeralls = tuple(sorted(triggeralls))
-    numbered = [tuple(sorted(group)) for group in numbered]
-
-    return (
-        triggeralls,
-        tuple(numbered),
-        controller.get('persistent'),
-        controller.get('ignorehitpause'),
-    )
-
-
 def strip_outer_parens(condition):
     """Remove one redundant pair of outer parentheses."""
     condition = condition.strip()
@@ -576,92 +562,37 @@ def generate_zss_state(state):
     if state['controllers']:
         output.append('')
 
-    groups = []
-    current = []
-    current_key = None
-
     for controller in state['controllers']:
-        key = get_trigger_key(controller)
+        triggeralls, numbered = get_conditions(controller)
 
-        if key == current_key:
-            current.append(controller)
-        else:
-            if current:
-                groups.append(current)
+        body_lines = list(controller.get('pure_comments', []))
 
-            current = [controller]
-            current_key = key
+        for name in ('type', 'persistent', 'ignorehitpause'):
+            comment = controller.get('special_comments', {}).get(name)
 
-    if current:
-        groups.append(current)
+            if comment:
+                body_lines.append(comment.strip())
 
-    for group in groups:
-        first = group[0]
+        raw_block = controller.get('raw_block', [])
 
-        triggeralls, numbered = get_conditions(first)
+        if any(
+            ':=' in split_code_and_comment(raw_line)[0]
+            for raw_line in raw_block
+        ):
+            body_lines.extend([
+                '# WARNING: assignment operator `:=` found in expression. '
+                'Manual adjustment required.',
+                '# Original CNS block:',
+            ])
+            body_lines.extend('# ' + raw_line.rstrip() for raw_line in raw_block)
 
-        body_lines = []
-        comments = [
-            controller.get('comment')
-            for controller in group
-            if controller.get('comment') is not None
-        ]
-
-        comments_identical = (
-            len(comments) == len(group)
-            and len(set(comments)) == 1
-        )
-
-        for controller in group:
-            if not comments_identical and controller.get('comment'):
-                body_lines.append(f"# {controller['comment']}")
-
-            body_lines.extend(
-                controller.get('pure_comments', [])
-            )
-
-            for name in ('type', 'persistent', 'ignorehitpause'):
-                comment = controller.get(
-                    'special_comments',
-                    {},
-                ).get(name)
-
-                if comment:
-                    body_lines.append(comment.strip())
-
-            body = format_controller_body(
-                controller['type'],
-                controller['params'],
-                controller.get('param_comments', {}),
-                controller.get('duplicates', []),
-                controller.get('ignorehitpause'),
-            )
-
-            body_lines.extend(body.splitlines())
-
-            raw_block = controller.get('raw_block', [])
-
-            controller_has_assignment = any(
-                ':=' in split_code_and_comment(raw_line)[0]
-                for raw_line in raw_block
-            )
-
-            if controller_has_assignment:
-                warning_lines = [
-                    '# WARNING: assignment operator `:=` found in expression. '
-                    'Manual adjustment required.',
-                    '# Original CNS block:',
-                ]
-
-                warning_lines.extend(
-                    '# ' + raw_line.rstrip()
-                    for raw_line in raw_block
-                )
-
-                # Put the warning immediately before this controller's
-                # generated body rather than before the whole merged group.
-                body_start = len(body_lines) - len(body.splitlines())
-                body_lines[body_start:body_start] = warning_lines
+        body_lines.extend(format_controller_body(
+            controller['type'],
+            controller['params'],
+            controller.get('param_comments', {}),
+            controller.get('duplicates', []),
+            controller.get('ignorehitpause'),
+        ).splitlines())
 
         def wrap(expression):
             if re.search(r'&&|\|\|', expression):
@@ -694,8 +625,8 @@ def generate_zss_state(state):
             )
             inner = strip_outer_parens(inner)
 
-        persistent = first.get('persistent')
-        ignorehitpause = first.get('ignorehitpause')
+        persistent = controller.get('persistent')
+        ignorehitpause = controller.get('ignorehitpause')
         modifiers = []
 
         if persistent is not None:
@@ -712,8 +643,8 @@ def generate_zss_state(state):
                 return ''
             return '\t' * level + line
 
-        if comments_identical:
-            output.append(f'# {comments[0]}')
+        if controller.get('comment') is not None:
+            output.append(f"# {controller['comment']}")
 
         if outer is None and inner is None:
             if prefix:
