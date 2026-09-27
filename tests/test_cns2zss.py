@@ -50,6 +50,23 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertEqual(output.count('[StateDef 1;'), 1)
         self.assertIn('# WARNING: Duplicate state +1 removed', output)
 
+    def test_persistent_stripped_in_negative_and_plus_one_states(self):
+        controller = (
+            '[State x]\ntype = Null\ntrigger1 = 1\n'
+            'persistent = 0 ; keep\n'
+        )
+
+        for number in ('-2', '-1', '+1'):
+            with self.subTest(number=number):
+                output = convert_cns_to_zss(
+                    f'[Statedef {number}]\n' + controller
+                )
+                self.assertNotIn('persistent', output)
+                self.assertNotIn('# keep', output)
+
+        output = convert_cns_to_zss('[Statedef 0]\n' + controller)
+        self.assertIn('persistent(0)', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

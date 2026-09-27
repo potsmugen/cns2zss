@@ -384,6 +384,12 @@ def parse_state_block(lines):
     if current_controller and current_controller.get('type'):
         state['controllers'].append(current_controller)
 
+    # ZSS crashes on persistent in negative states and +1, so drop it there.
+    if state['no'] == '+1' or (isinstance(state['no'], int) and state['no'] < 0):
+        for controller in state['controllers']:
+            controller['persistent'] = None
+            controller['special_comments'].pop('persistent', None)
+
     return state
 
 

@@ -1,4 +1,4 @@
-# cns2zss — Project briefing
+# cns2zss — Agent notes
 
 A Python script that converts M.U.G.E.N CNS character state files to Ikemen GO ZSS format. Stdlib-only with a Tkinter GUI. Core is `cns2zss.py`; GUI is `cns2zss_gui.py` and imports the core. No external dependencies.
 
@@ -8,8 +8,7 @@ Read the `.py` files. This doc is invariants and landmines, not a transcript. Af
 
 1. **Preserve everything possible.** Comments (standalone, inline, pure comments inside state blocks) must survive. Output should be clean, readable ZSS with the same logical structure.
 2. **Mechanical conversion only.** No semantic analysis, no optimization, no control-flow restructuring (e.g., no `else` conversion). Output is a direct translation, not a rewrite.
-3. **MUGEN 1.1 only.** Target is MUGEN 1.1 CNS syntax. Never consult Ikemen-GO docs or wiki for MUGEN facts — Ikemen is a diverging target.
-4. **Real files beat theory.** KFM and user-provided files are the ground truth.
+3. **Real files beat theory.** KFM and user-provided files are the ground truth.
 
 ## Architecture
 
@@ -32,6 +31,7 @@ Read the `.py` files. This doc is invariants and landmines, not a transcript. Af
 - Pure comments → after the state block
 - Controller merging: consecutive controllers with identical triggers (triggeralls + numbered triggers + persistent + ignorehitpause) are merged into one block
 - Conditions: triggerall → outer `if`; numbered triggers → inner `if` with `&&`/`||` chains
+- `persistent` → `persistent(N)` prefix, except in negative states and `+1` (stripped; see below)
 - Formatting: one‑line vs multi‑line based on `MAX_PARAMS_ON_LINE` and `MAX_ONE_LINE_LEN`
 
 **Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It skips duplicate state definitions by numeric state number, except literal `+1` remains distinct from `1`. Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`. If the entire file contains no `[Statedef]`, it is returned unchanged (sentinel `(NO_STATEDDEF)`); section stripping only applies once at least one `[Statedef]` exists.
@@ -73,7 +73,7 @@ A state block runs from one `[Statedef]` to the next `[Statedef]`. Pure comment 
 
 - `triggerall` → outer `if` (indented with `&&` for multiple).
 - Numbered triggers → inner `if` (`||` between trigger numbers, `&&` inside a single trigger).
-- `wrap_if_needed()` adds parentheses around terms containing `&&` or `||` (once — no double wrapping).
+- The inner `wrap()` helper adds parentheses around terms containing `&&` or `||` (once — no double wrapping).
 - `strip_outer_parens()` removes redundant outer parentheses.
 
 ### Controller merging
@@ -89,15 +89,19 @@ When merged, if all controllers share the same `comment` (label), it is output o
 ### Duplicate handling
 
 - **Duplicate controller parameters:** Keep first occurrence, add warning comment: `# WARNING: duplicate parameter: key: value`.
-- **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. `+1` and `1` are distinct (raw string matching).
+- **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
 
 ### `:=` assignment detection
 
 Scans every line of every controller (triggers and parameters). If `:=` found, adds warning comment and outputs original block as comment for manual adjustment.
 
+### persistent stripping
+
+Ikemen crashes on `persistent` in negative states and `[Statedef +1]`. At the end of `parse_state_block`, if `no` is `'+1'` or a negative int, every controller's `persistent` (and its inline comment) is dropped. Doing it at parse time means merging also ignores it.
+
 ### ignorehitpause insertion
 
-In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpause_val != '0'`, and `ctrl_type.lower()` is `'explod'`, `'modifyexplod'`, or `'afterimage'`, it inserts `ignorehitpause: 1` as the first parameter. This matches ZSS behavior for those controllers.
+In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpause_val != '0'`, and `controller_type.lower()` is `'explod'`, `'modifyexplod'`, or `'afterimage'`, it inserts `ignorehitpause: 1` as the first parameter. This matches ZSS behavior for those controllers.
 
 ## Output formatting
 
@@ -128,7 +132,8 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 ## Landmines (do not reintroduce)
 
 - **Don't add `else` conversion.** Requires Boolean algebra, out of scope.
-- **Don't treat `+1` as duplicate of `1`.** Duplicate detection uses raw string, so they are distinct.
+- **Don't treat `+1` as duplicate of `1`.** `+1` stays a string, so they are distinct.
+- **Don't emit `persistent` in negative states or `+1`.** Ikemen crashes.
 - **Don't check `:=` only in triggers.** Scan every line of every controller.
 - **Don't hardcode `100` for line limit.** Use `MAX_ONE_LINE_LEN` constant.
 - **Don't add runtime dependencies.** GUI is stdlib-only; PyInstaller is a build‑time exception.
@@ -155,6 +160,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - CLI and GUI output writes use a sibling temporary file and atomic replace, preserving an existing output if writing fails.
 - GUI conversion runs in a worker thread; overwrite prompts are a main‑thread pre‑pass.
 - `open_location` is cross‑platform (`os.startfile` / `open` / `xdg-open`).
+- `persistent` is stripped from negative states and `+1` (Ikemen crash).
 - `OrderedDict` removed; plain `dict` used everywhere (insertion order preserved on Python 3.7+).
 
 ## Parked / don't do unless asked
