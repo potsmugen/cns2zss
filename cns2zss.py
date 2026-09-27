@@ -462,25 +462,47 @@ def format_controller_body(
     return one_line
 
 
-def get_trigger_key(controller):
-    """Create a key for merging controllers."""
-    triggeralls = tuple(sorted(
+def get_conditions(controller):
+    """Return cleaned triggeralls and numbered trigger groups."""
+    triggeralls = [
         clean_condition(condition)
         for condition in controller['triggeralls']
-        if not is_always_true(condition)
-    ))
+    ]
+    numbered = [
+        [clean_condition(condition) for condition in controller['triggers'][number]]
+        for number in sorted(controller['triggers'])
+    ]
 
-    numbered = []
+    # Fold to no condition only when every trigger is literally always-true.
+    if all(
+        is_always_true(condition)
+        for condition in triggeralls + [c for group in numbered for c in group]
+    ):
+        return [], []
 
-    for number in sorted(controller['triggers']):
-        conditions = tuple(sorted(
-            clean_condition(condition)
-            for condition in controller['triggers'][number]
-            if not is_always_true(condition)
-        ))
+    # `1 && X` is `X`: drop 1s from AND groups, but never drop a whole OR term.
+    triggeralls = [c for c in triggeralls if not is_always_true(c)]
+    numbered = [
+        [c for c in group if not is_always_true(c)] or group[:1]
+        for group in numbered
+    ]
 
-        if conditions:
-            numbered.append(conditions)
+    # A lone all-1 trigger group is just ANDed with the triggeralls.
+    if (
+        triggeralls
+        and len(numbered) == 1
+        and all(is_always_true(c) for c in numbered[0])
+    ):
+        numbered = []
+
+    return triggeralls, numbered
+
+
+def get_trigger_key(controller):
+    """Create a key for merging controllers."""
+    triggeralls, numbered = get_conditions(controller)
+    triggeralls = tuple(sorted(triggeralls))
+    numbered = [tuple(sorted(group)) for group in numbered]
 
     return (
         triggeralls,
@@ -576,23 +598,7 @@ def generate_zss_state(state):
     for group in groups:
         first = group[0]
 
-        triggeralls = [
-            clean_condition(condition)
-            for condition in first['triggeralls']
-            if not is_always_true(condition)
-        ]
-
-        numbered = []
-
-        for number in sorted(first['triggers']):
-            conditions = [
-                clean_condition(condition)
-                for condition in first['triggers'][number]
-                if not is_always_true(condition)
-            ]
-
-            if conditions:
-                numbered.append(conditions)
+        triggeralls, numbered = get_conditions(first)
 
         body_lines = []
         comments = [

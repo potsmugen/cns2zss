@@ -67,6 +67,35 @@ class CNS2ZSSTest(unittest.TestCase):
         output = convert_cns_to_zss('[Statedef 0]\n' + controller)
         self.assertIn('persistent(0)', output)
 
+    def test_always_true_trigger_kept_unless_all_triggers_are_one(self):
+        header = '[Statedef 200]\n[State 200, End]\ntype = Null\n'
+
+        output = convert_cns_to_zss(
+            header + 'trigger1 = AnimTime = 0\ntrigger2 = 1\n'
+        )
+        self.assertIn('if AnimTime = 0\n|| 1 {', output)
+
+        output = convert_cns_to_zss(
+            header + 'triggerall = 1\ntrigger1 = 1\ntrigger2 = (1)\n'
+        )
+        self.assertNotIn('if', output)
+        self.assertIn('\nNull{}\n', output)
+
+    def test_always_true_dropped_from_and_groups(self):
+        header = '[Statedef 200]\n[State 200, End]\ntype = Null\n'
+        cases = {
+            'trigger1 = 1\ntrigger1 = A\n': 'if A {',
+            'triggerall = 1\ntrigger1 = X\n': 'if X {',
+            'triggerall = X\ntrigger1 = 1\n': 'if X {',
+            'trigger1 = A\ntrigger2 = 1\ntrigger2 = B\n': 'if A\n|| B {',
+        }
+
+        for triggers, expected in cases.items():
+            with self.subTest(triggers=triggers):
+                output = convert_cns_to_zss(header + triggers)
+                self.assertIn(expected, output)
+                self.assertNotIn('1\n&&', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

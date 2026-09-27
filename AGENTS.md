@@ -142,6 +142,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - **Don't add a `<...>` separator heuristic.** Any comment with angle brackets is an ordinary comment; the old version truncated states.
 - **Don't echo input encoding on write.** Always write UTF‑8.
 - **Don't map `parentVarSet`/`parentVarAdd` to `varSet`/`varAdd`.** It silently writes the helper's own vars instead of the parent's.
+- **Don't drop a whole OR term that is `1`.** Dropping `trigger2 = 1` made an always-firing controller conditional. Keep `|| 1`; dropping `1` inside an AND group is fine.
 
 ## Regressions
 
@@ -162,6 +163,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - `open_location` is cross‑platform (`os.startfile` / `open` / `xdg-open`).
 - `persistent` is stripped from negative states and `+1` (Ikemen crash).
 - `OrderedDict` removed; plain `dict` used everywhere (insertion order preserved on Python 3.7+).
+- `trigger2 = 1` in an OR is kept as `|| 1` instead of being dropped; `1` is only removed from AND groups.
 
 ## Parked / don't do unless asked
 
@@ -195,5 +197,9 @@ Rules:
 - Across different trigger numbers → joined with `||`.
 - Trigger lines may appear OUT OF ORDER in the CNS source (e.g. a `trigger4` line can appear between two `trigger1` lines). MUGEN groups by trigger number, not by source order, so the converter MUST group by integer key and ignore source position.
 - Duplicate same-number triggers (e.g. `trigger4 = A` then `trigger4 = B`) are preserved as `A && B` even if logically impossible — no deduplication, no semantic cleanup.
-- `trigger1 = 1` is always-true and filtered out (omitted from output).
+- Always-true `1`:
+  - Every trigger is `1` → no `if`.
+  - `1` next to other conditions in an AND group (same trigger number, or triggeralls) → dropped (`1 && X` is `X`).
+  - A lone `1` trigger number with triggeralls → dropped (ANDed with them).
+  - A `1` trigger number among other trigger numbers → kept as `|| 1`, so the other triggers stay visible.
 - Exact line-wrapping and parenthesis style for single-condition groups is governed by the formatting rules (MAX_PARAMS_ON_LINE / MAX_ONE_LINE_LEN), NOT this blueprint. This blueprint defines logical grouping only.
