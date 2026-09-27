@@ -198,6 +198,24 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertIn('# header note', output)
         self.assertIn('# trigger1: only when A', output)
 
+    def test_invalid_trigger_names_become_warnings(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\n'
+            'trigger1 = A\ntrigger = B\ntrigger0 = C\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('if A {', output)
+        self.assertIn(
+            '# WARNING: trigger ignored by the engine (invalid trigger name): B',
+            output,
+        )
+        self.assertIn(
+            '# WARNING: trigger0 ignored by the engine (invalid trigger name): C',
+            output,
+        )
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

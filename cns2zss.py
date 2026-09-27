@@ -286,6 +286,7 @@ def parse_state_block(lines):
                 'param_comments': {},
                 'special_comments': {},
                 'duplicates': [],
+                'ignored_triggers': [],
                 'persistent': None,
                 'ignorehitpause': None,
                 'comment': controller_comment,
@@ -307,7 +308,7 @@ def parse_state_block(lines):
                     continue
 
                 trigger_match = re.match(
-                    r'(trigger\d*|triggerall)\s*=\s*(.*)',
+                    r'(trigger\w*)\s*=\s*(.*)',
                     clean_line,
                     re.IGNORECASE,
                 )
@@ -318,9 +319,15 @@ def parse_state_block(lines):
 
                     if key == 'triggerall':
                         current_controller['triggeralls'].append(condition)
-                    else:
-                        number = int(key[7:]) if len(key) > 7 else 1
+                    elif re.fullmatch(r'trigger0*[1-9]\d*', key):
+                        number = int(key[7:])
                         current_controller['triggers'][number].append(condition)
+                    else:
+                        # The engine ignores invalid names like `trigger` or `trigger0`.
+                        current_controller['ignored_triggers'].append(
+                            f'# WARNING: {key} ignored by the engine '
+                            f'(invalid trigger name): {condition}'
+                        )
 
                     # Conditions are rewritten, so keep their comments above the body.
                     if line_comment:
@@ -459,7 +466,6 @@ def parse_state_block(lines):
     # CNS stops checking triggers at the first missing number after trigger1.
     for controller in state['controllers']:
         triggers = controller['triggers']
-        controller['ignored_triggers'] = []
 
         if 1 not in triggers:
             controller['ignored_triggers'].append(
