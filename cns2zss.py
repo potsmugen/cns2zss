@@ -251,7 +251,7 @@ def parse_state_block(lines):
         )
 
         if controller_match:
-            if current_controller and current_controller.get('type'):
+            if current_controller:
                 state['controllers'].append(current_controller)
 
             header = controller_match.group(1).strip()
@@ -468,7 +468,7 @@ def parse_state_block(lines):
 
         index += 1
 
-    if current_controller and current_controller.get('type'):
+    if current_controller:
         state['controllers'].append(current_controller)
 
     # CNS stops checking triggers at the first missing number after trigger1.
@@ -667,6 +667,19 @@ def generate_zss_state(state):
         output.append('')
 
     for controller in state['controllers']:
+        # The engine rejects controllers without a type; keep them as comments.
+        if not controller['type']:
+            output.append(
+                '# WARNING: no type; the engine rejects this controller'
+            )
+            output.extend(
+                '# ' + raw_line.rstrip()
+                for raw_line in controller['raw_block']
+                if raw_line.strip()
+            )
+            output.append('')
+            continue
+
         triggeralls, numbered = get_conditions(controller)
 
         body_lines = list(controller.get('pure_comments', []))

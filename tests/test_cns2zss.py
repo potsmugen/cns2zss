@@ -223,6 +223,19 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertNotIn('type: A;', output)
         self.assertIn('# WARNING: duplicate attribute: type: A', output)
 
+    def test_controller_without_type_is_kept_as_comments(self):
+        source = (
+            '[Statedef 200]\n[State 200, x] ; important\n'
+            'trigger1 = A\nvalue = 1\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('# WARNING: no type; the engine rejects this controller', output)
+        self.assertIn('# [State 200, x] ; important', output)
+        self.assertIn('# value = 1', output)
+        self.assertNotIn('if A', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

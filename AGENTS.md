@@ -114,6 +114,10 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 - **Duplicate StateDef attributes:** Keep first occurrence, like the engine; warning after the header: `# WARNING: duplicate attribute: key: value`.
 - **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
 
+### Controllers without `type`
+
+The engine rejects them. They aren't converted: the original block is output as comments under `# WARNING: no type; the engine rejects this controller`.
+
 ### `:=` assignment detection
 
 Scans every line of every controller (triggers and parameters). If `:=` found, adds warning comment and outputs original block as comment for manual adjustment.
@@ -170,6 +174,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Controllers without `type` are kept as commented-out CNS with a warning instead of vanishing.
 - Duplicate StateDef attributes keep the first value like the engine, instead of the last.
 - `trigger =` and `trigger0 =` are no longer converted (as trigger1 / an OR term); the engine ignores them, so they become warnings.
 - Comments on `[Statedef]` headers, `[State]` headers and trigger lines are kept instead of dropped.
