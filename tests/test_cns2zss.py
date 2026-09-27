@@ -386,7 +386,7 @@ class CNS2ZSSTest(unittest.TestCase):
         output = convert_cns_to_zss(source)
 
         self.assertIn('\t\tx: 1;\n\t\t#y = 2\n\t}', output)
-        self.assertIn('if B {\n\t# Now jump\n\tNull{}\n\t# end of b\n}', output)
+        self.assertIn('# Now jump\n# b\nif B {\n\tNull{}\n\t# end of b\n}', output)
         self.assertIn('# Next state\n\n#=====', output)
 
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):

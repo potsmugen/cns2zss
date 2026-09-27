@@ -336,7 +336,8 @@ def parse_state_block(lines):
                 'persistent': None,
                 'ignorehitpause': None,
                 'comment': controller_comment,
-                'pure_comments': header_comments + (
+                'comments_before': header_comments,
+                'pure_comments': (
                     ['#' + comment.rstrip()] if comment and comment.strip() else []
                 ),
                 'raw_block': raw_block,
@@ -879,6 +880,9 @@ def generate_zss_state(state, keep_warnings=True, warnings=None):
             if not line:
                 return ''
             return '\t' * level + line
+
+        # Comments that sat above the [State] header go above the label.
+        output.extend(controller['comments_before'])
 
         if controller.get('comment') is not None:
             output.append(f"# {controller['comment']}")
