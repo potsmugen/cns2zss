@@ -180,6 +180,13 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - The release ZIP contains the executable, both Python scripts, and both formats of the same app icon; the workflow verifies those ZIP entries before publishing.
 - Versioned releases are not built by this workflow.
 
+## Tests
+
+- `tests/fixtures/comprehensive.cns` is the single golden fixture: one controller or state per rule. When fixing a bug, add a case to it and regenerate `comprehensive.zss` only after reviewing the diff.
+- Invariant tests run on every fixture: every `[State` header is accounted for, comments inside states survive, braces balance in both modes, the warning log is identical in both modes, and remove mode only keeps `:=` / load-error warnings.
+- Before a release, also run real characters (KFM from the Ikemen screenpack repo, anything in `working/`) and check controller counts and warnings. That's how the unclosed-header bug was found.
+- CI (`releases.yaml`) runs `python -m unittest discover -s tests` on Windows.
+
 ## Landmines (do not reintroduce)
 
 - **Don't merge controllers into one block.** CNS checks each controller's triggers when it runs; a merged ZSS block checks once, so an earlier controller's effect (vars, position, anim…) can't stop a later one.

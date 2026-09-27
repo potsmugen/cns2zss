@@ -140,3 +140,158 @@ Null{}
 [StateDef +1;
 	type: S;
 ]
+
+# ===== Edge cases found on real characters; see AGENTS.md =====
+
+# Removed [Data] section
+# power = 3000
+
+#===== Banner kept after a removed section =====
+
+#============================================================
+# State 200, Punch
+#============================================================
+
+[StateDef 200;
+	type: S;
+	ctrl: 0;
+]
+# WARNING: duplicate attribute: type: A
+#header comment
+
+# Always
+Null{}
+
+# OrOne
+if AnimTime = 0
+|| 1 {
+	Null{}
+}
+
+# AndOne
+if A {
+	# trigger1: only when A
+	Null{}
+}
+
+# Gap
+if A {
+	# WARNING: trigger ignored by the engine (invalid trigger name): C
+	# WARNING: trigger0 ignored by the engine (invalid trigger name): D
+	# WARNING: trigger3 ignored by the engine (no trigger2): B
+	Null{}
+}
+
+# Xor
+if (A ^^ B)
+&& C {
+	Null{}
+}
+
+# Strings
+if command = "a (b)" && var(1) {
+	Null{}
+}
+
+# Persistent
+ignorehitpause if Ctrl {
+	persistent(2) if AnimElem = 3
+	|| AnimElem = 5 {
+		PlaySnd{value: 1,0}
+	}
+}
+
+# NoMerge1
+if var(1) = 0 {
+	varSet{v: 1; value: 1}
+}
+
+# NoMerge2
+if var(1) = 0 {
+	varAdd{v: 2; value: 1}
+}
+
+# Params
+PosAdd{
+	x: 1;
+	#y = 2
+	z: 3;
+	# closing comment
+	# WARNING: duplicate parameter: type: VelSet
+}
+
+# Comment above the next header
+# Parent
+parentVarSet{fv: 3; value: 1.5}
+
+# Map
+MapSet{map: "combo"; value: 5}
+
+# ShortCircuit
+if 1 || var(5) := root,var(5) {
+	# WARNING: assignment operator `:=` found in expression. Manual adjustment required.
+	# Original CNS block:
+	# [State 200, ShortCircuit]
+	# type = Null
+	# trigger1 = 1 || var(5) := root,var(5)
+	Null{}
+}
+
+# WARNING: no type; the engine rejects this controller
+# [State 200, NoType] ; engine rejects
+# trigger1 = 1
+
+# WARNING: trigger1 is empty; the engine rejects this controller
+# [State 200, EmptyTrigger]
+# type = Null
+# trigger1 =
+
+# NoTrigger1
+if A {
+	# WARNING: no trigger1; the engine rejects this controller
+	Null{}
+}
+
+# WARNING: unclosed [State] header; the engine ignores this controller
+# [State 200, Unclosed
+# type = Null
+# trigger1 = 1
+
+# AfterUnclosed
+if B {
+	Null{}
+}
+
+# WARNING: invalid [State] header; the engine ignores the rest of this state
+# [State]
+# type = Null
+# trigger1 = 1
+# [State 200, NeverRead]
+# type = Null
+# trigger1 = 1
+
+
+#============================================================
+# State -2
+#============================================================
+
+[StateDef -2]
+
+# NoPersistent
+if A {
+	Null{}
+}
+
+
+#============================================================
+# State const(StateJump)
+#============================================================
+
+[StateDef const(StateJump);
+	type: A;
+]
+
+# WARNING: Duplicate state 200 removed
+
+# Section after a duplicate state
+# Removed [Remap] section

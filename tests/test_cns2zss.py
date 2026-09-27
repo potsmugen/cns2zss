@@ -1,3 +1,5 @@
+import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -6,6 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import cns2zss
 from cns2zss import (
     convert_cns_to_zss,
     read_file_with_encoding,
@@ -14,6 +17,37 @@ from cns2zss import (
 
 
 FIXTURES = Path(__file__).parent / 'fixtures'
+SCRIPT = Path(__file__).resolve().parents[1] / 'cns2zss.py'
+
+
+def read_fixture(name):
+    return (FIXTURES / name).read_text(encoding='utf-8')
+
+
+def kept_states(source):
+    """Yield (lines, parsed state) for every non-duplicate state, like the converter."""
+    lines = source.splitlines()
+    seen = set()
+    index = 0
+
+    while index < len(lines):
+        match = cns2zss.STATEDEF_RE.match(
+            cns2zss.strip_comment_for_parsing(lines[index])
+        )
+
+        if not match:
+            index += 1
+            continue
+
+        end = cns2zss.find_state_end(lines, index)
+        number = cns2zss.parse_state_number(match)
+
+        if number not in seen:
+            seen.add(number)
+            block = lines[index:end]
+            yield block, cns2zss.parse_state_block(block)
+
+        index = end
 
 
 class CNS2ZSSTest(unittest.TestCase):
@@ -28,6 +62,122 @@ class CNS2ZSSTest(unittest.TestCase):
         actual = convert_cns_to_zss(source)
 
         self.assertEqual(actual, expected)
+
+    def test_comprehensive_fixture_warnings(self):
+        warnings = []
+        convert_cns_to_zss(read_fixture('comprehensive.cns'), warnings=warnings)
+
+        self.assertEqual(warnings, [
+            'Removed [Data] section',
+            'State 10 [ParentVarAdd]: duplicate parameter: value: 3',
+            'State 10 [DuplicateParameter]: duplicate parameter: text: "second"',
+            'State 10 [AssignmentInParameter]: assignment operator `:=` found. '
+            'Manual adjustment required.',
+            'Duplicate state 20 removed',
+            'Removed [Data] section',
+            'State 200: duplicate attribute: type: A',
+            'State 200 [Gap]: trigger ignored by the engine (invalid trigger name): C',
+            'State 200 [Gap]: trigger0 ignored by the engine (invalid trigger name): D',
+            'State 200 [Gap]: trigger3 ignored by the engine (no trigger2): B',
+            'State 200 [Params]: duplicate parameter: type: VelSet',
+            'State 200 [ShortCircuit]: assignment operator `:=` found. '
+            'Manual adjustment required.',
+            'State 200 [NoType]: no type; the engine rejects this controller',
+            'State 200 [EmptyTrigger]: trigger1 is empty; '
+            'the engine rejects this controller',
+            'State 200 [NoTrigger1]: no trigger1; the engine rejects this controller',
+            'State 200 [Unclosed]: unclosed [State] header; '
+            'the engine ignores this controller',
+            'State 200: invalid [State] header; '
+            'the engine ignores the rest of this state',
+            'Duplicate state 200 removed',
+            'Removed [Remap] section',
+        ])
+
+    # Invariants checked on every fixture, in both modes. These caught real
+    # bugs on real characters (silently lost controllers and comments).
+
+    def fixture_sources(self):
+        for path in sorted(FIXTURES.glob('*.cns')):
+            yield path.name, path.read_text(encoding='utf-8')
+
+    def test_invariant_every_state_header_is_accounted_for(self):
+        header = re.compile(r'^\s*\[\s*State(?=[\s,\]])', re.IGNORECASE)
+
+        for name, source in self.fixture_sources():
+            for block, state in kept_states(source):
+                with self.subTest(fixture=name, state=state['no']):
+                    headers = sum(
+                        1 for line in block
+                        if header.match(cns2zss.strip_comment_for_parsing(line))
+                    )
+                    in_tail = sum(
+                        1 for line in state['ignored_tail']
+                        if header.match(cns2zss.strip_comment_for_parsing(line))
+                    )
+                    self.assertEqual(headers, len(state['controllers']) + in_tail)
+
+    def test_invariant_comments_in_states_are_kept(self):
+        for name, source in self.fixture_sources():
+            output = convert_cns_to_zss(source)
+
+            for block, _ in kept_states(source):
+                for line in block:
+                    comment = cns2zss.split_code_and_comment(line)[1]
+
+                    if comment and comment.strip():
+                        with self.subTest(fixture=name, comment=comment):
+                            self.assertIn(comment.strip(), output)
+
+    def test_invariant_braces_balance(self):
+        for name, source in self.fixture_sources():
+            for keep in (True, False):
+                with self.subTest(fixture=name, keep_warnings=keep):
+                    depth = 0
+
+                    for line in convert_cns_to_zss(source, keep).splitlines():
+                        code = re.sub(r'"[^"]*"', '', line.split('#', 1)[0])
+                        depth += code.count('{') - code.count('}')
+                        self.assertGreaterEqual(depth, 0, line)
+
+                    self.assertEqual(depth, 0)
+
+    def test_invariant_removing_keeps_the_same_log(self):
+        for name, source in self.fixture_sources():
+            with self.subTest(fixture=name):
+                kept, removed = [], []
+                convert_cns_to_zss(source, True, kept)
+                convert_cns_to_zss(source, False, removed)
+                self.assertEqual(kept, removed)
+
+    def test_invariant_removing_only_keeps_manual_fixes(self):
+        allowed = ('assignment operator `:=`', 'the engine rejects this controller')
+
+        for name, source in self.fixture_sources():
+            output = convert_cns_to_zss(source, keep_warnings=False)
+
+            for line in output.splitlines():
+                if '# WARNING' in line or '# Removed [' in line:
+                    with self.subTest(fixture=name, line=line):
+                        self.assertTrue(any(text in line for text in allowed))
+
+    def test_cli_no_warnings_removes_code_but_prints_warnings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'input.cns'
+            output = Path(directory) / 'output.zss'
+            source.write_text(
+                '[Data]\nlife = 1\n[Statedef 0]\n', encoding='utf-8'
+            )
+
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), '--no-warnings', str(source), str(output)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            self.assertIn('WARNING: Removed [Data] section', result.stdout)
+            self.assertNotIn('Removed', output.read_text(encoding='utf-8'))
 
     def test_no_statedef_returns_sentinel(self):
         source = '[Data]\nlife = 1000\n'

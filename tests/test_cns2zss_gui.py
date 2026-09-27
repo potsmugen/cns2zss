@@ -146,6 +146,28 @@ class CNS2ZSSGuiTest(unittest.TestCase):
         self.assertEqual(convert.call_args.args[:2], ('input', False))
         app.log.assert_any_call('  WARNING: State 1: something')
 
+    def test_incorrect_code_dropdown_sets_keep_warnings(self):
+        for choice, keep in (('Comment out', True), ('Remove', False)):
+            with self.subTest(choice=choice):
+                app = CNS2ZSSApp.__new__(CNS2ZSSApp)
+                app.conversion_active = False
+                app.cancel_event = threading.Event()
+                app.file_listbox = Mock()
+                app.file_listbox.get.return_value = ('missing.cns',)
+                app.incorrect_code = Mock()
+                app.incorrect_code.get.return_value = choice
+                app.convert_sel_btn = Mock()
+                app.convert_all_btn = Mock()
+                app.cancel_btn = Mock()
+                app.log = Mock()
+
+                with patch('cns2zss_gui.threading.Thread') as thread:
+                    app.convert_files(use_selection=False)
+
+                self.assertEqual(
+                    thread.call_args.kwargs['args'], (['missing.cns'], keep)
+                )
+
 
 if __name__ == '__main__':
     unittest.main()

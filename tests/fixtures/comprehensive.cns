@@ -110,3 +110,132 @@ type = C
 
 [Statedef +1]
 type = S
+
+; ===== Edge cases found on real characters; see AGENTS.md =====
+
+[Data]
+life = 1000
+; power = 3000
+
+;===== Banner kept after a removed section =====
+[Statedef 200, Punch] ; header comment
+type = S
+type = A
+ctrl = 0
+
+[State 200, Always]
+type = Null
+trigger1 = 1
+
+[State 200, OrOne]
+type = Null
+trigger1 = AnimTime = 0
+trigger2 = 1
+
+[State 200, AndOne]
+type = Null
+triggerall = 1
+trigger1 = 1
+trigger1 = A ; only when A
+
+[State 200, Gap]
+type = Null
+trigger1 = A
+trigger3 = B
+trigger = C
+trigger0 = D
+
+[State 200, Xor]
+type = Null
+trigger1 = A ^^ B
+trigger1 = C
+
+[State 200, Strings]
+type = Null
+trigger1 = command = "a (b)" && var (1)
+
+[State 200, Persistent]
+type = PlaySnd
+triggerall = Ctrl
+trigger1 = AnimElem = 3
+trigger2 = AnimElem = 5
+persistent = 2
+ignorehitpause = 1
+value = 1,0
+
+[State 200, NoMerge1]
+type = VarSet
+trigger1 = var(1) = 0
+var(1) = 1
+
+[State 200, NoMerge2]
+type = VarAdd
+trigger1 = var(1) = 0
+var(2) = 1
+
+[State 200, Params]
+type = PosAdd
+type = VelSet
+trigger1 = 1
+x = 1
+;y = 2
+z = 3
+; closing comment
+
+; Comment above the next header
+[State 200, Parent]
+type = ParentVarSet
+trigger1 = 1
+fvar(3) = 1.5
+
+[State 200, Map]
+type = MapSet
+trigger1 = 1
+map(combo) = 5
+
+[State 200, ShortCircuit]
+type = Null
+trigger1 = 1 || var(5) := root,var(5)
+
+[State 200, NoType] ; engine rejects
+trigger1 = 1
+
+[State 200, EmptyTrigger]
+type = Null
+trigger1 =
+
+[State 200, NoTrigger1]
+type = Null
+triggerall = A
+
+[State 200, Unclosed
+type = Null
+trigger1 = 1
+
+[State 200, AfterUnclosed]
+type = Null
+trigger1 = B
+
+[State]
+type = Null
+trigger1 = 1
+
+[State 200, NeverRead]
+type = Null
+trigger1 = 1
+
+[Statedef -2]
+[State -2, NoPersistent]
+type = Null
+trigger1 = A
+persistent = 0
+
+[Statedef const(StateJump)]
+type = A
+
+[Statedef 200]
+type = S
+
+; Section after a duplicate state
+[Remap]
+x = y
