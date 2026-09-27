@@ -10,9 +10,10 @@ A Python script that converts M.U.G.E.N CNS character state files to Ikemen GO Z
 - Converts CNS triggers to ZSS `if` blocks.
 - Converts state controller formatting.
 - Removes sections unrelated to character states (`[Data]`, `[Command]`, etc).
-- Handles duplicate state definitions and controller parameters, which would crash in ZSS.
+- Handles duplicate state definitions, StateDef attributes and controller parameters, which would crash in ZSS.
 - Respects original code execution order.
 - Respects `persistent` and `ignoreHitPause` flags.
+- Discard `persistent` flags in negative states, where ZSS rejects them.
 - Preserves original comments.
 
 ## What this tool does not do

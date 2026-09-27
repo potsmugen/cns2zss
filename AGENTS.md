@@ -51,7 +51,7 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 - `pure_comments`: list of comment lines with no code
 
 **Controller parser:** each `[State ...]` becomes a dict with:
-- `type`, `triggeralls`, `triggers` (dict mapping num → list of conds), `params`, `param_comments`, `duplicates`, `persistent`, `ignorehitpause`, `comment`, `raw_block`
+- `type`, `triggeralls`, `triggers` (dict mapping num → list of conds), `params`, `param_comments`, `special_comments` (comments on `type`/`persistent`/`ignorehitpause` lines), `pure_comments`, `duplicates`, `trigger_warnings` (ignored/invalid/missing trigger warnings), `persistent`, `ignorehitpause`, `comment`, `raw_block`
 
 **Map assignment:** `parse_map_assignment()` turns `map(name) = value` into `map: "name"; value: value`.
 
@@ -124,7 +124,7 @@ Scans every line of every controller (triggers and parameters). If `:=` found, a
 
 ### persistent stripping
 
-Ikemen crashes on `persistent` in negative states and `[Statedef +1]`. At the end of `parse_state_block`, if `no` is `'+1'` or a negative int, every controller's `persistent` (and its inline comment) is dropped.
+ZSS refuses to compile `persistent` in negative states and `[Statedef +1]` (CNS ignores it there). At the end of `parse_state_block`, if `no` is `'+1'` or a negative int, every controller's `persistent` (and its inline comment) is dropped.
 
 ### ignorehitpause insertion
 
@@ -161,7 +161,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - **Don't merge controllers into one block.** CNS checks each controller's triggers when it runs; a merged ZSS block checks once, so an earlier controller's effect (vars, position, anim…) can't stop a later one.
 - **Don't add `else` conversion.** Requires Boolean algebra, out of scope.
 - **Don't treat `+1` as duplicate of `1`.** `+1` stays a string, so they are distinct.
-- **Don't emit `persistent` in negative states or `+1`.** Ikemen crashes.
+- **Don't emit `persistent` in negative states or `+1`.** ZSS won't compile it.
 - **Don't check `:=` only in triggers.** Scan every line of every controller.
 - **Don't hardcode `100` for line limit.** Use `MAX_ONE_LINE_LEN` constant.
 - **Don't add runtime dependencies.** GUI is stdlib-only; PyInstaller is a build‑time exception.
@@ -202,7 +202,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 - CLI and GUI output writes use a sibling temporary file and atomic replace, preserving an existing output if writing fails.
 - GUI conversion runs in a worker thread; overwrite prompts are a main‑thread pre‑pass.
 - `open_location` is cross‑platform (`os.startfile` / `open` / `xdg-open`).
-- `persistent` is stripped from negative states and `+1` (Ikemen crash).
+- `persistent` is stripped from negative states and `+1` (ZSS compile error).
 - `OrderedDict` removed; plain `dict` used everywhere (insertion order preserved on Python 3.7+).
 - `trigger2 = 1` in an OR is kept as `|| 1` instead of being dropped; `1` is only removed from AND groups.
 

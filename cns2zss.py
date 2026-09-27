@@ -145,11 +145,8 @@ def clean_condition(condition: str) -> str:
 
 
 def is_always_true(condition: str) -> bool:
-    """Return whether the condition is the literal trigger1 = 1."""
+    """Return whether the condition is literally 1 (optionally in parentheses)."""
     condition = condition.strip()
-
-    if condition.lower().startswith('trigger1 = '):
-        condition = condition[11:].strip()
 
     if condition.startswith('(') and condition.endswith(')'):
         condition = condition[1:-1].strip()
@@ -286,7 +283,7 @@ def parse_state_block(lines):
                 'param_comments': {},
                 'special_comments': {},
                 'duplicates': [],
-                'ignored_triggers': [],
+                'trigger_warnings': [],
                 'persistent': None,
                 'ignorehitpause': None,
                 'comment': controller_comment,
@@ -324,7 +321,7 @@ def parse_state_block(lines):
                         current_controller['triggers'][number].append(condition)
                     else:
                         # The engine ignores invalid names like `trigger` or `trigger0`.
-                        current_controller['ignored_triggers'].append(
+                        current_controller['trigger_warnings'].append(
                             f'# WARNING: {key} ignored by the engine '
                             f'(invalid trigger name): {condition}'
                         )
@@ -476,7 +473,7 @@ def parse_state_block(lines):
         triggers = controller['triggers']
 
         if 1 not in triggers:
-            controller['ignored_triggers'].append(
+            controller['trigger_warnings'].append(
                 '# WARNING: no trigger1; the engine rejects this controller'
             )
             continue
@@ -487,12 +484,12 @@ def parse_state_block(lines):
 
         for number in sorted(n for n in triggers if n > gap):
             for condition in triggers.pop(number):
-                controller['ignored_triggers'].append(
+                controller['trigger_warnings'].append(
                     f'# WARNING: trigger{number} ignored by the engine '
                     f'(no trigger{gap}): {condition}'
                 )
 
-    # ZSS crashes on persistent in negative states and +1, so drop it there.
+    # ZSS rejects persistent in negative states and +1, so drop it there.
     if state['no'] == '+1' or (isinstance(state['no'], int) and state['no'] < 0):
         for controller in state['controllers']:
             controller['persistent'] = None
@@ -690,7 +687,7 @@ def generate_zss_state(state):
             if comment:
                 body_lines.append(comment.strip())
 
-        body_lines.extend(controller.get('ignored_triggers', []))
+        body_lines.extend(controller.get('trigger_warnings', []))
 
         raw_block = controller.get('raw_block', [])
 
