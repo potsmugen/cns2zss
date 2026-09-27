@@ -216,6 +216,13 @@ class CNS2ZSSTest(unittest.TestCase):
             output,
         )
 
+    def test_first_statedef_attribute_wins_like_the_engine(self):
+        output = convert_cns_to_zss('[Statedef 200]\ntype = S\ntype = A\n')
+
+        self.assertIn('\ttype: S;', output)
+        self.assertNotIn('type: A;', output)
+        self.assertIn('# WARNING: duplicate attribute: type: A', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

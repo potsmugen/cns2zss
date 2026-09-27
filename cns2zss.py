@@ -452,11 +452,19 @@ def parse_state_block(lines):
 
             if attribute_match:
                 attribute = attribute_match.group(1).lower()
-                state['attributes'][attribute] = attribute_match.group(2).strip()
+                value = attribute_match.group(2).strip()
 
-                line_comment = get_comment_for_line(raw_line)
-                if line_comment:
-                    state['attr_comments'][attribute] = line_comment
+                # Like the engine, the first occurrence wins.
+                if attribute in state['attributes']:
+                    state['pure_comments'].append(
+                        f'# WARNING: duplicate attribute: {attribute}: {value}'
+                    )
+                else:
+                    state['attributes'][attribute] = value
+
+                    line_comment = get_comment_for_line(raw_line)
+                    if line_comment:
+                        state['attr_comments'][attribute] = line_comment
 
         index += 1
 

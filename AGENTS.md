@@ -111,6 +111,7 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 ### Duplicate handling
 
 - **Duplicate controller parameters** (including `type`, `persistent`, `ignorehitpause`): Keep first occurrence, like the engine; add warning comment: `# WARNING: duplicate parameter: key: value`.
+- **Duplicate StateDef attributes:** Keep first occurrence, like the engine; warning after the header: `# WARNING: duplicate attribute: key: value`.
 - **Duplicate state definitions:** Skip later occurrences with warning: `# WARNING: Duplicate state X removed`. `+1` and `1` are distinct (`+1` is kept as a string, other numbers as ints).
 
 ### `:=` assignment detection
@@ -169,6 +170,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Duplicate StateDef attributes keep the first value like the engine, instead of the last.
 - `trigger =` and `trigger0 =` are no longer converted (as trigger1 / an OR term); the engine ignores them, so they become warnings.
 - Comments on `[Statedef]` headers, `[State]` headers and trigger lines are kept instead of dropped.
 - `[Statedef 200, Punch]` and `[Statedef const(Name)]` are converted instead of removed as unknown sections.
