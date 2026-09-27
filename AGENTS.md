@@ -78,6 +78,8 @@ Rule: anything that needs manual adjustment is never removed:
 
 Ordinary source comments are never affected.
 
+Every warning is always logged (GUI log, CLI output), kept in the file or not: pass a list as `warnings=` and the converter appends `State N [label]: text` messages to it.
+
 ## Generation philosophy
 
 The script is rule‑based, not heuristic. No semantic analysis.
@@ -191,6 +193,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Warnings are printed to the GUI log and CLI output, whether kept in the file or removed.
 - Comments between parameters (e.g. a commented-out parameter) stay in place instead of moving above the controller.
 - New `keep_warnings` option (GUI checkbox, `--no-warnings`); `:=` warnings are never dropped.
 - Invalid `[State]` headers no longer silently drop one controller while converting the ones after it; the rest of the state is kept as comments with a warning, like the engine ignores it.

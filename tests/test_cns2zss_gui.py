@@ -62,7 +62,7 @@ class CNS2ZSSGuiTest(unittest.TestCase):
             def read_input(path):
                 return Path(path).stem, 'utf-8'
 
-            def convert_input(content, keep_warnings=True):
+            def convert_input(content, keep_warnings=True, warnings=None):
                 if content == 'skipped':
                     return '(NO_STATEDDEF)'
                 if content == 'failed':
@@ -130,16 +130,21 @@ class CNS2ZSSGuiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / 'input.cns')
 
+            def convert_input(content, keep_warnings, warnings):
+                warnings.append('State 1: something')
+                return 'converted output'
+
             with patch(
                 'cns2zss_gui.read_file_with_encoding',
                 return_value=('input', 'utf-8'),
             ), patch(
                 'cns2zss_gui.convert_cns_to_zss',
-                return_value='converted output',
+                side_effect=convert_input,
             ) as convert:
                 app._convert_worker([path], False)
 
-        convert.assert_called_once_with('input', False)
+        self.assertEqual(convert.call_args.args[:2], ('input', False))
+        app.log.assert_any_call('  WARNING: State 1: something')
 
 
 if __name__ == '__main__':

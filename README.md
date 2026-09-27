@@ -33,7 +33,7 @@ python cns2zss.py [--no-warnings] input.cns [output.zss]
 
 If no output file is given, the result is saved as `input.cns.zss` in the same folder.
 
-By default, code the engine ignores (invalid triggers, duplicates, etc.) is kept as commented-out code with a warning. `--no-warnings` removes it instead. Warnings that need manual adjustment (`:=`, controllers that stop the character from loading) are always kept.
+By default, code the engine ignores (invalid triggers, duplicates, etc.) is kept as commented-out code with a warning. `--no-warnings` removes it instead. Warnings that need manual adjustment (`:=`, controllers that stop the character from loading) are always kept. Either way, every warning is also printed to the console (or the GUI log).
 
 ### GUI (graphical front-end)
 

@@ -676,12 +676,26 @@ def strip_outer_parens(condition):
 # ZSS generation
 # ----------------------------------------------------------------------
 
-def generate_zss_state(state, keep_warnings=True):
+def generate_zss_state(state, keep_warnings=True, warnings=None):
     """Generate ZSS for one parsed state.
 
     keep_warnings=False drops warnings and code the engine ignores anyway.
     `:=` warnings are always kept, since they need manual adjustment.
+    Every warning is also appended to `warnings`, kept in the output or not.
     """
+    def log(text, controller=None):
+        if warnings is None:
+            return
+
+        where = f"State {state['no']}"
+        if controller and controller.get('comment'):
+            where += f" [{controller['comment']}]"
+
+        warnings.append(f"{where}: {text.strip().removeprefix('# WARNING: ')}")
+
+    for text in state['attr_warnings']:
+        log(text)
+
     output = [
         '#============================================================',
         f"# State {state['no']}"
@@ -723,6 +737,7 @@ def generate_zss_state(state, keep_warnings=True):
         reason = 'no type' if not controller['type'] else controller.get('rejected')
 
         if reason:
+            log(f'{reason}; the engine rejects this controller', controller)
             output.append(
                 f'# WARNING: {reason}; the engine rejects this controller'
             )
@@ -744,6 +759,12 @@ def generate_zss_state(state, keep_warnings=True):
             if comment:
                 body_lines.append(comment.strip())
 
+        for text in controller['load_errors'] + controller['trigger_warnings']:
+            log(text, controller)
+
+        for key, value in controller['duplicates']:
+            log(f'duplicate parameter: {key}: {value}', controller)
+
         # Load errors need manual fixing, so they are never dropped.
         body_lines.extend(controller.get('load_errors', []))
 
@@ -753,6 +774,7 @@ def generate_zss_state(state, keep_warnings=True):
         raw_block = controller.get('raw_block', [])
 
         if has_assignment(raw_block):
+            log('assignment operator `:=` found. Manual adjustment required.', controller)
             body_lines.extend([
                 '# WARNING: assignment operator `:=` found in expression. '
                 'Manual adjustment required.',
@@ -857,6 +879,9 @@ def generate_zss_state(state, keep_warnings=True):
 
         output.append('')
 
+    if state['ignored_tail']:
+        log('invalid [State] header; the engine ignores the rest of this state')
+
     if state['ignored_tail'] and (
         keep_warnings or has_assignment(state['ignored_tail'])
     ):
@@ -904,11 +929,16 @@ def find_state_end(lines, index):
     return end
 
 
-def convert_cns_to_zss(content: str, keep_warnings: bool = True) -> str:
+def convert_cns_to_zss(
+    content: str,
+    keep_warnings: bool = True,
+    warnings: list | None = None,
+) -> str:
     """Convert complete CNS content to ZSS.
 
     keep_warnings=False drops warnings and code the engine ignores anyway.
     `:=` warnings are always kept, since they need manual adjustment.
+    If `warnings` is a list, every warning is appended to it for logging.
     """
     if not any(
         STATEDEF_RE.match(strip_comment_for_parsing(line))
@@ -951,6 +981,9 @@ def convert_cns_to_zss(content: str, keep_warnings: bool = True) -> str:
                     output.extend(pending)
                     pending = []
 
+                if warnings is not None:
+                    warnings.append(f'Duplicate state {state_number} removed')
+
                 if keep_warnings:
                     output.append(
                         f'# WARNING: Duplicate state {state_number} removed'
@@ -972,7 +1005,7 @@ def convert_cns_to_zss(content: str, keep_warnings: bool = True) -> str:
 
             next_index = find_state_end(lines, index)
             state = parse_state_block(lines[index:next_index])
-            output.append(generate_zss_state(state, keep_warnings))
+            output.append(generate_zss_state(state, keep_warnings, warnings))
             index = next_index
             continue
 
@@ -980,6 +1013,9 @@ def convert_cns_to_zss(content: str, keep_warnings: bool = True) -> str:
             if pending:
                 output.extend(pending)
                 pending = []
+
+            if warnings is not None:
+                warnings.append(f'Removed [{stripped[1:-1]}] section')
 
             if keep_warnings:
                 output.append(f'# Removed [{stripped[1:-1]}] section')
@@ -1129,7 +1165,8 @@ if __name__ == '__main__':
     cns_data, _ = read_file_with_encoding(infile)
 
     try:
-        zss_data = convert_cns_to_zss(cns_data, keep_warnings)
+        warnings = []
+        zss_data = convert_cns_to_zss(cns_data, keep_warnings, warnings)
 
         if zss_data == '(NO_STATEDDEF)':
             print(
@@ -1139,6 +1176,9 @@ if __name__ == '__main__':
         else:
             write_file_atomically(outfile, zss_data)
             print(f'Converted {infile} -> {outfile} (encoding: utf-8)')
+
+            for warning in warnings:
+                print(f'  WARNING: {warning}')
 
     except Exception as error:
         print(f'Error: {error}')

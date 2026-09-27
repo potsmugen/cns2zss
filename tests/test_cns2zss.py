@@ -358,6 +358,22 @@ class CNS2ZSSTest(unittest.TestCase):
             convert_cns_to_zss(source),
         )
 
+    def test_warnings_are_collected_even_when_removed(self):
+        source = (
+            '[Data]\nlife = 1\n'
+            '[Statedef 200]\n[State 200, a]\ntype = Null\n'
+            'trigger1 = A\ntrigger3 = B\n'
+        )
+        warnings = []
+
+        output = convert_cns_to_zss(source, keep_warnings=False, warnings=warnings)
+
+        self.assertNotIn('WARNING', output)
+        self.assertEqual(warnings, [
+            'Removed [Data] section',
+            'State 200 [a]: trigger3 ignored by the engine (no trigger2): B',
+        ])
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

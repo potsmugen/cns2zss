@@ -336,7 +336,8 @@ class CNS2ZSSApp:
 
             try:
                 data, _ = read_file_with_encoding(filepath)
-                zss_data = convert_cns_to_zss(data, keep_warnings)
+                warnings = []
+                zss_data = convert_cns_to_zss(data, keep_warnings, warnings)
 
                 if zss_data == '(NO_STATEDDEF)':
                     self.log(
@@ -347,6 +348,9 @@ class CNS2ZSSApp:
                 else:
                     write_file_atomically(outpath, zss_data)
                     self.log(f"  -> Saved: {outpath}")
+
+                    for warning in warnings:
+                        self.log(f"  WARNING: {warning}")
                     converted += 1
 
             except Exception as error:
