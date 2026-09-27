@@ -315,6 +315,38 @@ class CNS2ZSSTest(unittest.TestCase):
         self.assertNotIn('if B', output)
         self.assertNotIn('if C', output)
 
+    def test_no_warnings_drops_ignored_code_but_keeps_assignments(self):
+        source = (
+            '[Data]\nlife = 1\n'
+            '[Statedef 200]\ntype = S\ntype = A\n'
+            '[State 200, a]\ntype = Null\ntrigger1 = A\ntrigger3 = B\n'
+            'x = 1\nx = 2\n'
+            '[State 200, b]\ntrigger1 = C\n'
+            '[State 200, c]\ntype = Null\ntrigger1 = D\nx = var(0) := 1\n'
+            '[State]\ntype = Null\ntrigger1 = E\n'
+            '[Statedef 200]\n'
+        )
+
+        output = convert_cns_to_zss(source, keep_warnings=False)
+
+        self.assertNotIn('Removed', output)
+        self.assertNotIn('# WARNING: duplicate', output)
+        self.assertNotIn('ignored by the engine', output)
+        self.assertNotIn('invalid [State] header', output)
+        self.assertNotIn('Duplicate state', output)
+        self.assertIn('assignment operator `:=`', output)
+
+    def test_no_warnings_keeps_load_errors(self):
+        source = (
+            '[Statedef 200]\n[State 200, a]\ntrigger1 = A\n'
+            '[State 200, b]\ntype = Null\ntriggerall = B\n'
+        )
+
+        output = convert_cns_to_zss(source, keep_warnings=False)
+
+        self.assertIn('# WARNING: no type; the engine rejects this controller', output)
+        self.assertIn('# WARNING: no trigger1; the engine rejects this controller', output)
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

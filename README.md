@@ -28,10 +28,12 @@ A Python script that converts M.U.G.E.N CNS character state files to Ikemen GO Z
 ### Command Line (core script)
 
 ```bash
-python cns2zss.py input.cns [output.zss]
+python cns2zss.py [--no-warnings] input.cns [output.zss]
 ```
 
 If no output file is given, the result is saved as `input.cns.zss` in the same folder.
+
+By default, code the engine ignores (invalid triggers, duplicates, etc.) is kept as commented-out code with a warning. `--no-warnings` removes it instead. Warnings that need manual adjustment (`:=`, controllers that stop the character from loading) are always kept.
 
 ### GUI (graphical front-end)
 
@@ -39,7 +41,7 @@ If no output file is given, the result is saved as `input.cns.zss` in the same f
 python cns2zss_gui.py
 ```
 
-Launches a GUI for the script.  
+Launches a GUI for the script. The "Keep warnings" checkbox does the same as `--no-warnings` when unticked.
 
 ## Example
 

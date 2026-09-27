@@ -41,7 +41,7 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 
 ## Architecture
 
-**Entry point:** `convert_cns_to_zss(content: str) -> str`. Returns the sentinel string `'(NO_STATEDDEF)'` if the input contains no `[Statedef]` block (caller should skip writing and log).
+**Entry point:** `convert_cns_to_zss(content: str, keep_warnings: bool = True) -> str`. Returns the sentinel string `'(NO_STATEDDEF)'` if the input contains no `[Statedef]` block (caller should skip writing and log).
 
 **State parser:** `parse_state_block(lines)` parses a `[Statedef ...]` block into:
 - `no`: numeric state number (int), except literal `+1` and `const(Name)` are kept as strings
@@ -67,6 +67,16 @@ Sources: MUGEN 1.1 CNS doc and Ikemen GO `src/compiler.go`. Put reference docs i
 - Formatting: one‑line vs multi‑line based on `MAX_PARAMS_ON_LINE` and `MAX_ONE_LINE_LEN`
 
 **Main conversion loop:** `convert_cns_to_zss()` buffers standalone comments and blank lines, flushing them as prelude when a `[Statedef]` is found. It skips duplicate state definitions by numeric state number, except literal `+1` remains distinct from `1`. Non‑state sections (`[Data]`, `[Cmd]`, etc.) are replaced with `# Removed [...]`; their trailing comments are kept for what follows, like a state's. If the file contains no `[Statedef]`, the sentinel is returned and the file is left untouched; section stripping only applies once at least one `[Statedef]` exists.
+
+## Keep warnings option
+
+`keep_warnings` (GUI checkbox, CLI `--no-warnings`, default on). Off drops the converter's warnings and the code the engine ignores anyway: removed-section notes, duplicate state/attribute/parameter warnings, ignored triggers (gap, invalid name), invalid `[State]` tails.
+
+Rule: anything that needs manual adjustment is never removed:
+- `:=` warnings and original blocks. An invalid `[State]` tail containing `:=` is kept whole.
+- Load errors: controllers the engine rejects (no `type`, empty trigger, no `trigger1`) make the character fail to load. Don't "fix" broken input by dropping them; always keep the warning.
+
+Ordinary source comments are never affected.
 
 ## Generation philosophy
 
@@ -180,6 +190,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- New `keep_warnings` option (GUI checkbox, `--no-warnings`); `:=` warnings are never dropped.
 - Invalid `[State]` headers no longer silently drop one controller while converting the ones after it; the rest of the state is kept as comments with a warning, like the engine ignores it.
 - Removing a duplicate state no longer swallows the sections and comments after it.
 - An empty trigger (`trigger1 =`) no longer produces `if  {`; the controller is kept as comments with a warning.

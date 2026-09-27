@@ -108,6 +108,14 @@ class CNS2ZSSApp:
         )
         self.cancel_btn.pack(side='left', padx=5)
 
+        # Off drops warnings and code the engine ignores; `:=` warnings stay.
+        self.keep_warnings = tk.BooleanVar(value=True)
+        tk.Checkbutton(
+            root,
+            text="Keep warnings and code the engine ignores (as comments)",
+            variable=self.keep_warnings
+        ).pack()
+
         # Log area
         tk.Label(
             root,
@@ -282,7 +290,7 @@ class CNS2ZSSApp:
         # Run the heavy work off the UI thread
         self.worker_thread = threading.Thread(
             target=self._convert_worker,
-            args=(approved,),
+            args=(approved, self.keep_warnings.get()),
             daemon=True
         )
         self.worker_thread.start()
@@ -312,7 +320,7 @@ class CNS2ZSSApp:
             self.close_when_done = True
             self.cancel_conversion()
 
-    def _convert_worker(self, paths):
+    def _convert_worker(self, paths, keep_warnings=True):
         converted = 0
         skipped = 0
         failed = 0
@@ -328,7 +336,7 @@ class CNS2ZSSApp:
 
             try:
                 data, _ = read_file_with_encoding(filepath)
-                zss_data = convert_cns_to_zss(data)
+                zss_data = convert_cns_to_zss(data, keep_warnings)
 
                 if zss_data == '(NO_STATEDDEF)':
                     self.log(
