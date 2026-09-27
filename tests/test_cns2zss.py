@@ -122,6 +122,14 @@ class CNS2ZSSTest(unittest.TestCase):
             output,
         )
 
+    def test_xor_is_wrapped_when_joined_with_and(self):
+        source = (
+            '[Statedef 200]\n[State 200, x]\ntype = Null\n'
+            'trigger1 = A ^^ B\ntrigger1 = C\n'
+        )
+
+        self.assertIn('(A ^^ B)\n&& C', convert_cns_to_zss(source))
+
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):
             with self.subTest(number=number):

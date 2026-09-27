@@ -101,7 +101,7 @@ A state block runs from one `[Statedef]` to the next `[Statedef]` or non-state s
 
 - `triggerall` → outer `if` (indented with `&&` for multiple).
 - Numbered triggers → inner `if` (`||` between trigger numbers, `&&` inside a single trigger).
-- The inner `wrap()` helper adds parentheses around terms containing `&&` or `||` (once — no double wrapping).
+- The inner `wrap()` helper adds parentheses around terms containing `&&`, `^^` or `||` (once — no double wrapping).
 - `strip_outer_parens()` removes redundant outer parentheses.
 
 ### Duplicate handling
@@ -165,6 +165,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Terms containing `^^` are wrapped in parentheses; `A ^^ B && C` means `A ^^ (B && C)`.
 - Triggers after a gap in numbering are no longer converted (the engine ignores them); they become warnings.
 - Controllers with identical triggers are no longer merged into one block (an earlier controller's effect could no longer stop a later one).
 - `parentvaradd`/`parentvarset` keep their names instead of becoming `varAdd`/`varSet`.

@@ -615,8 +615,9 @@ def generate_zss_state(state):
             controller.get('ignorehitpause'),
         ).splitlines())
 
+        # Wrap operators that bind looser than &&, so joining with && is safe.
         def wrap(expression):
-            if re.search(r'&&|\|\|', expression):
+            if re.search(r'&&|\|\||\^\^', expression):
                 return f'({expression})'
             return expression
 
