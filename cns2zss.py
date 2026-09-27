@@ -197,6 +197,23 @@ def has_assignment(lines) -> bool:
     return any(':=' in split_code_and_comment(line)[0] for line in lines)
 
 
+def split_trailing_comments(lines):
+    """Split lines into (own, following) at the trailing comment block.
+
+    Comments right after the last code line belong to it; from the first
+    blank line on, trailing comments belong to whatever follows.
+    """
+    end = len(lines)
+
+    while end > 0 and is_comment_or_blank(lines[end - 1]):
+        end -= 1
+
+    while end < len(lines) and lines[end].strip():
+        end += 1
+
+    return lines[:end], lines[end:]
+
+
 def is_comment_or_blank(line: str) -> bool:
     """Return whether a line is blank or a standalone comment."""
     return (
@@ -222,6 +239,7 @@ def parse_state_block(lines):
     }
 
     current_controller = None
+    carried = []  # comments before a header, separated by a blank line
     index = 0
 
     while index < len(lines):
@@ -255,7 +273,7 @@ def parse_state_block(lines):
                 state['controllers'].append(current_controller)
                 current_controller = None
 
-            state['ignored_tail'] = lines[index:]
+            state['ignored_tail'] = carried + lines[index:]
             break
 
         controller_match = re.match(
@@ -277,7 +295,6 @@ def parse_state_block(lines):
                 label = header
                 controller_comment = label or None
 
-            raw_block = [raw_line]
             controller_lines = []
             index += 1
 
@@ -289,8 +306,20 @@ def parse_state_block(lines):
                     break
 
                 controller_lines.append(next_line)
-                raw_block.append(next_line)
                 index += 1
+
+            header_comments = [
+                get_comment_for_line(line).strip()
+                for line in carried
+                if get_comment_for_line(line)
+            ]
+            raw_block = [line for line in carried if line.strip()] + [raw_line]
+            carried = []
+
+            if index < len(lines):
+                controller_lines, carried = split_trailing_comments(controller_lines)
+
+            raw_block += controller_lines
 
             current_controller = {
                 'type': None,
@@ -299,6 +328,7 @@ def parse_state_block(lines):
                 'params': {},
                 'param_comments': {},
                 'comments_after': {},
+                'comments_end': [],
                 'special_comments': {},
                 'duplicates': [],
                 'trigger_warnings': [],
@@ -306,7 +336,7 @@ def parse_state_block(lines):
                 'persistent': None,
                 'ignorehitpause': None,
                 'comment': controller_comment,
-                'pure_comments': (
+                'pure_comments': header_comments + (
                     ['#' + comment.rstrip()] if comment and comment.strip() else []
                 ),
                 'raw_block': raw_block,
@@ -484,7 +514,15 @@ def parse_state_block(lines):
                             line_comment
                         )
 
-            current_controller['pure_comments'].extend(pending_comments)
+            # Closing comments stay at the end: after the last parameter,
+            # or after the controller if it has none.
+            if pending_comments and current_controller['params']:
+                current_controller['comments_after'].setdefault(
+                    list(current_controller['params'])[-1], []
+                ).extend(pending_comments)
+            else:
+                current_controller['comments_end'].extend(pending_comments)
+
             continue
 
         if current_controller is None:
@@ -790,6 +828,7 @@ def generate_zss_state(state, keep_warnings=True, warnings=None):
             controller.get('ignorehitpause'),
             controller.get('comments_after'),
         ).splitlines())
+        body_lines.extend(controller.get('comments_end', []))
 
         # Wrap operators that bind looser than &&, so joining with && is safe.
         def wrap(expression):
@@ -923,10 +962,8 @@ def find_state_end(lines, index):
 
         end += 1
 
-    while end > index + 1 and is_comment_or_blank(lines[end - 1]):
-        end -= 1
-
-    return end
+    own, _ = split_trailing_comments(lines[index + 1:end])
+    return index + 1 + len(own)
 
 
 def convert_cns_to_zss(

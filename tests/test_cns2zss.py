@@ -285,7 +285,7 @@ class CNS2ZSSTest(unittest.TestCase):
 
     def test_duplicate_state_removal_stops_at_the_state(self):
         source = (
-            '[Statedef 1]\n[Statedef 1]\ntype = S\n'
+            '[Statedef 1]\n[Statedef 1]\ntype = S\n\n'
             '; next section\n[Data]\nlife = 1\n[Statedef 2]\n'
         )
 
@@ -373,6 +373,21 @@ class CNS2ZSSTest(unittest.TestCase):
             'Removed [Data] section',
             'State 200 [a]: trigger3 ignored by the engine (no trigger2): B',
         ])
+
+    def test_blank_line_decides_where_trailing_comments_go(self):
+        source = (
+            '[Statedef 200]\n'
+            '[State 200, a]\ntype = PosAdd\ntrigger1 = A\nx = 1\n;y = 2\n\n'
+            '; Now jump\n'
+            '[State 200, b]\ntype = Null\ntrigger1 = B\n; end of b\n\n'
+            '; Next state\n[Statedef 210]\n'
+        )
+
+        output = convert_cns_to_zss(source)
+
+        self.assertIn('\t\tx: 1;\n\t\t#y = 2\n\t}', output)
+        self.assertIn('if B {\n\t# Now jump\n\tNull{}\n\t# end of b\n}', output)
+        self.assertIn('# Next state\n\n#=====', output)
 
     def test_other_plus_prefixed_statedef_numbers_are_not_accepted(self):
         for number in ('+0', '+2', '+01'):

@@ -107,6 +107,7 @@ Constants in `cns2zss.py`:
 - **Standalone comments:** Lines starting with `;` (after spaces) → `#` and preserved.
 - **Pure comments inside states:** Collected into `state['pure_comments']` and output after the `[StateDef ...]` block.
 - **Inline comments:** Kept as `# comment` on the same line in ZSS.
+- **Trailing comments (blank-line rule):** comments right after a controller's last code line (no blank line) belong to it: after its last parameter, or after the controller if it has none. From the first blank line on, trailing comments belong to what follows: the next controller's top, or outside the state (banners for the next state/section). `split_trailing_comments()` implements this for controllers and `find_state_end()`.
 - **Comments between parameters:** stay between them (`comments_after` on the preceding parameter; forces multi-line). Comments before the first parameter or before trigger/type lines go above the body.
 - **Header and trigger comments:** `[Statedef]` header comments join the state's pure comments; `[State]` header comments and trigger-line comments (as `# trigger1: text`) go above the controller body, since conditions are rewritten.
 - **Empty `;` lines:** Skipped (no comment text → not emitted).
@@ -193,6 +194,7 @@ In `format_controller_body`, if `ignorehitpause_val is not None and ignorehitpau
 
 ## Regressions
 
+- Comments before a `[State]` header went to the previous controller, and a controller's closing comments left the state; a blank line now decides which side they belong to.
 - Warnings are printed to the GUI log and CLI output, whether kept in the file or removed.
 - Comments between parameters (e.g. a commented-out parameter) stay in place instead of moving above the controller.
 - New `keep_warnings` option (GUI checkbox, `--no-warnings`); `:=` warnings are never dropped.
